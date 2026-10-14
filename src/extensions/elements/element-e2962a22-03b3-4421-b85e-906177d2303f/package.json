@@ -1,0 +1,17 @@
+{
+  "name": "@weweb-internal/ext-element-e2962a22-03b3-4421-b85e-906177d2303f",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/weweb-assets/ww-form-input"
+  },
+  "version": "3.3.1",
+  "license": "MIT",
+  "dependencies": {
+    "imask": "^7.6.1"
+  },
+  "private": true,
+  "exports": {
+    ".": "./src/wwElement.vue",
+    "./config": "./ww-config.js"
+  }
+}

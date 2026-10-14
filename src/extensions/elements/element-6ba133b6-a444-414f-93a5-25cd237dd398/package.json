@@ -1,0 +1,13 @@
+{
+  "name": "@weweb-internal/ext-element-6ba133b6-a444-414f-93a5-25cd237dd398",
+  "repository": {
+    "url": "https://github.com/weweb-assets/ww-webapp-checkbox"
+  },
+  "version": "3.3.1",
+  "license": "MIT",
+  "private": true,
+  "exports": {
+    ".": "./src/wwElement.vue",
+    "./config": "./ww-config.js"
+  }
+}

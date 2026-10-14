@@ -1,0 +1,9 @@
+{
+  "name": "@weweb-internal/ext-section-ef0ecc71-9a59-4eab-94b0-b36d66d3d61d",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/wwSection.vue",
+    "./config": "./ww-config.js"
+  }
+}

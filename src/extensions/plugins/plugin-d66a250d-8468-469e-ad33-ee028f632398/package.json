@@ -1,0 +1,14 @@
+{
+  "name": "@weweb-internal/ext-plugin-d66a250d-8468-469e-ad33-ee028f632398",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/weweb-assets/plugin-openai"
+  },
+  "version": "3.3.0",
+  "license": "MIT",
+  "private": true,
+  "exports": {
+    ".": "./src/wwPlugin.js",
+    "./config": "./ww-config.js"
+  }
+}

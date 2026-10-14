@@ -1,0 +1,14 @@
+{
+  "name": "@weweb-internal/ext-plugin-9c40819b-4a8f-468f-9ba5-4b9699f3361f",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/weweb-assets/plugin-chartjs"
+  },
+  "version": "3.1.0",
+  "license": "MIT",
+  "private": true,
+  "exports": {
+    ".": "./src/wwPlugin.js",
+    "./config": "./ww-config.js"
+  }
+}

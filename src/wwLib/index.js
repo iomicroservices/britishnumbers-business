@@ -1,0 +1,422 @@
+import emitter from 'tiny-emitter/instance';
+import services from './services/index.js';
+import { useIconsStore } from '@/pinia/icons';
+
+ /* wwFront:start */
+// eslint-disable-next-line no-undef
+import plugin_29809245_a5ea_4687_af79_952998abab22 from '@weweb-internal/ext-plugin-29809245-a5ea-4687-af79-952998abab22';
+import plugin_2bd1c688_31c5_443e_ae25_59aa5b6431fb from '@weweb-internal/ext-plugin-2bd1c688-31c5-443e-ae25-59aa5b6431fb';
+import plugin_d66a250d_8468_469e_ad33_ee028f632398 from '@weweb-internal/ext-plugin-d66a250d-8468-469e-ad33-ee028f632398';
+import plugin_f9ef41c3_1c53_4857_855b_f2f6a40b7186 from '@weweb-internal/ext-plugin-f9ef41c3-1c53-4857-855b-f2f6a40b7186';
+import plugin_1fa0dd68_5069_436c_9a7d_3b54c340f1fa from '@weweb-internal/ext-plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa';
+import plugin_9c40819b_4a8f_468f_9ba5_4b9699f3361f from '@weweb-internal/ext-plugin-9c40819b-4a8f-468f-9ba5-4b9699f3361f';
+/* wwFront:end */
+
+import { computed, reactive } from 'vue';
+import { useBackTableViewsStore } from '@/pinia/backTableViews.js';
+import { useBackAuthStore } from '@/pinia/backAuth.js';
+import { getRuntimeEnvironment } from '@/helpers/frontEnv.js';
+import { useEnvVariablesStore } from '@/pinia/envVariables.js';
+import { createEnvironmentVariablesContext } from './services/environmentVariables';
+
+let runtimeActivationError;
+
+export default {
+    ...services,
+     $on(event, fn) {
+        emitter.on(event, fn);
+    },
+    $once(event, fn) {
+        emitter.once(event, fn);
+    },
+    $emit(event, ...args) {
+        if (!event) {
+            return;
+        }
+        emitter.emit(event, ...args);
+    },
+    $off(event, fn) {
+        emitter.off(event, fn);
+    },
+     front: {},
+    $focus: null,
+    env: process.env.NODE_ENV,
+    runtimeActivated: false,
+    async initFront({ router, store, staticRendering = false }) {
+ 
+        this.front.router = router;
+        /* wwFront:start */
+        this.$store = store;
+        /* wwFront:end */
+
+        //Init services
+        this.wwLog.init();
+
+ 
+        await this.wwWebsiteData.init();
+        this.wwLang.init(router);
+
+        /* wwFront:start */
+        // eslint-disable-next-line no-undef
+        wwLib.wwPluginHelper.registerPlugin('plugin-29809245-a5ea-4687-af79-952998abab22', plugin_29809245_a5ea_4687_af79_952998abab22);
+wwLib.wwPluginHelper.registerPlugin('plugin-2bd1c688-31c5-443e-ae25-59aa5b6431fb', plugin_2bd1c688_31c5_443e_ae25_59aa5b6431fb);
+wwLib.wwPluginHelper.registerPlugin('plugin-d66a250d-8468-469e-ad33-ee028f632398', plugin_d66a250d_8468_469e_ad33_ee028f632398);
+wwLib.wwPluginHelper.registerPlugin('plugin-f9ef41c3-1c53-4857-855b-f2f6a40b7186', plugin_f9ef41c3_1c53_4857_855b_f2f6a40b7186);
+wwLib.wwPluginHelper.registerPlugin('plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa', plugin_1fa0dd68_5069_436c_9a7d_3b54c340f1fa);
+wwLib.wwPluginHelper.registerPlugin('plugin-9c40819b-4a8f-468f-9ba5-4b9699f3361f', plugin_9c40819b_4a8f_468f_9ba5_4b9699f3361f);
+        /* wwFront:end */
+
+ 
+        if (!staticRendering) this.activateRuntime();
+    },
+    activateRuntime() {
+        if (this.runtimeActivated) return;
+        if (runtimeActivationError) throw runtimeActivationError;
+
+        try {
+            void this.wwPluginHelper.activatePlugins();
+            services.scrollStore.start();
+            services.keyboardEventStore.start();
+            services.pwaStore.start();
+            this.runtimeActivated = true;
+        } catch (error) {
+            runtimeActivationError = error;
+            throw error;
+        }
+    },
+     // TODO: Verify with Alexis, still uses wwImageMultiLang
+    getResponsiveStyleProp({ store, style, uid, states = [], prop }) {
+        store = store || wwLib.getFrontWindow().wwLib.$store;
+        if (!style && uid) {
+            const wwObject = this.$store.getters['websiteData/getWwObjects'][uid];
+            if (!wwObject) return '';
+            style = (wwObject._state || {}).style || {};
+        }
+
+        const screenSizes = store.getters['front/getScreenSizes'];
+        const screenSize = store.getters['front/getScreenSize'];
+
+        let value = '';
+
+        for (const media in screenSizes) {
+            if (style[media] && typeof style[media][prop] !== 'undefined') {
+                value = style[media][prop];
+            }
+            if (media === screenSize) {
+                break;
+            }
+        }
+        for (const state of states) {
+            for (const media in screenSizes) {
+                if (style[`${state}_${media}`] && style[`${state}_${media}`][prop]) {
+                    value = style[`${state}_${media}`][prop];
+                }
+                if (media === screenSize) {
+                    break;
+                }
+            }
+        }
+
+        return value;
+    },
+    globalContext: reactive({
+        auth: computed(() => {
+            const backAuthStore = useBackAuthStore(wwLib.$pinia);
+            return {
+                user: backAuthStore.user,
+                session: backAuthStore.session,
+                isAuthenticated: backAuthStore.isAuthenticated,
+            };
+        }),
+        env: computed(() => {
+            const envVariablesStore = useEnvVariablesStore(wwLib.$pinia);
+            let env = wwLib.getEnvironment();
+            if (env === 'preview') env = 'production';
+            return createEnvironmentVariablesContext(Object.values(envVariablesStore.values), env);
+        }),
+        tableViews: computed(() => {
+            const backTableViewsStore = useBackTableViewsStore(wwLib.$pinia);
+            return backTableViewsStore?.data;
+        }),
+        page: computed(() => {
+            const page = wwLib.$store.getters['websiteData/getPage'];
+            if (!page) return {};
+            else if (!page.cmsDataSetPath) return { ...pageSanitizer(page) };
+            return { ...pageSanitizer(page), data: wwLib.$store.getters['data/getPageCollectionData'] };
+        }),
+        pageParameters: computed(() => {
+            const pageParameters = Object.values(wwLib.$store.getters['data/getPageParameterVariables']);
+            const pageParametersValueMap = {};
+            for (const pageParameter of pageParameters) pageParametersValueMap[pageParameter.id] = pageParameter.value;
+            return pageParametersValueMap;
+        }),
+        pages: computed(() => {
+            const pages = wwLib.$store.getters['websiteData/getPages'];
+            const pagesValueMap = {};
+            for (const page of pages) pagesValueMap[page.id] = pageSanitizer(page);
+            return pagesValueMap;
+        }),
+        colors: computed(() => {
+            const theme = wwLib.$store.getters['front/getTheme'];
+             /* wwFront:start */
+            // eslint-disable-next-line no-unreachable, no-undef
+            return theme === 'dark' ? {"f1d91354-d232-4bc9-a592-1c984029f6f0":"#F5F8FF","026ea80f-ab82-4e1d-9ec8-16007b3d9a75":"#EFF6FF","4ae72514-db02-4375-a11e-7dfc9818b82d":"#DBEAFE","614ec867-4753-4950-8abd-74b608489fe3":"#BFDBFE","5f867681-27e9-4b74-a5be-c56f41569809":"#93C5FD","37f808d8-39ea-41fc-9dcb-aee867ec9c5b":"#60A5FA","d947b3c9-8582-4ea2-bdb3-572c07a6d6e2":"#3B82F6","5c90a59f-335d-4d73-b291-726c6ec25216":"#2563EB","d5c2d84b-1183-47f8-92e8-e2435408e0f5":"#1D4ED8","edd09f46-5e05-4507-8bce-b912e578cf4d":"#1E40AF","3f398fc2-c024-4ccf-b5c1-4a3f26c01cb5":"#1E3A8A","ade643e9-cd58-43cd-87e6-8fd0210573be":"#FCFCFD","60037ea1-0828-4b0b-940f-9453c3514f97":"#FFFFFF","e80f17ee-791b-43e7-9c2b-392a3a7e9ed2":"#FAFAFA","0ef1a27a-ac15-4b7d-9434-37ebee00c96c":"#F4F4F5","439d2018-0782-4bdb-a76e-9180bc922eb1":"#E4E4E7","bf94f167-ff14-490a-b5e7-910ebaf8913f":"#D4D4D8","095df436-ad4f-467d-92e0-35fbaaf7b63c":"#A1A1AA","d9b3c0ed-2ace-41b7-8186-2156d100fb11":"#71717A","cd54e007-9433-4f17-861f-df2d990f6c45":"#52525B","6cc4aa91-cf37-4f1f-8449-f63edd3d3e08":"#3F3F46","daebcfd2-0e29-4827-ac6b-f87dc06ec693":"#27272A","07250712-6d2a-4a15-936e-e479a405ea31":"#18181B","7acf0ec8-a924-4b94-9f21-3a474bcba099":"#71717a","15ac5ccd-77a0-42ad-bb1c-23d95b505f16":"#fafafa","b5c3405f-db19-44b6-b49e-c4aaf1b69969":"#E4E4E7","23533b28-5a23-4d42-86bf-4a881df701d9":"#181818","ec0f1b1e-8046-404c-882f-160cb4232495":"#d4d4d8","f6a1bf04-7852-4ac3-b062-949dbfba63e7":"#27a745","74490cca-1dc6-44a0-a329-3a45ab8c4890":"#27A74533","5e7c550c-6607-4f38-ba8b-0bc44f07fcc6":"#27A74580","a71001c0-84ec-4338-8491-47c07a414066":"#dc3545","587c5fde-4d9b-4509-812b-7758b0b06312":"#E6F7FF","c3024a2f-eed0-42fd-b6a5-404eff49c891":"#BAE7FF","010e38e8-99b4-4f17-bd7e-3cb6010f5f1d":"#91D5FF","522c1913-21eb-403b-b0cb-a720063b3c1a":"#69C0FF","41564651-f225-4f9a-a989-1f54852d39ca":"#40A9FF","1c561640-a6d6-4914-8eb7-8cdc86d98ab6":"#1890FF","871b637f-9b2a-4cec-b03e-800f120d7e99":"#096DD9","9f526fa2-8a2d-4e19-9bd7-0189d41ea672":"#0050B3","989c4920-204f-4235-88b9-72d1796be2e6":"#003A8C","5bcc5b1f-ebbf-46b3-b939-cc25442bf3ba":"#002766","885728d3-5862-45c5-9ef9-b13d8a02f42b":"#FF4D4F","e7c64387-36eb-4ad2-be93-d0bab9c3f097":"#FAAD14","09e96658-7a44-4ca4-b426-4811e9a1fbe5":"#52C41A","b7f065cc-ddb0-489a-bcde-2a7aaa9af81b":"#000000D9","defbc6ef-1319-42da-8f30-db555727b8f1":"#FFFFFF","c211b7f5-4762-4094-bdf5-b4f0d263bcbb":"#FAFAFA","8b3c0e00-19be-4e82-ad88-7a92f4582db8":"#F5F5F5","2971e0fa-3223-4d77-8830-9c0759c536cd":"#F0F0F0","ee682ecb-deba-4df9-a326-7afd61a24dd8":"#D9D9D9","cafe44d3-c856-4aff-9be9-2d4251463cb0":"#BFBFBF","0f232106-efd3-433f-a238-80d66c1fd8cf":"#8C8C8C","c5ca2059-2885-4125-974e-608c82d2e603":"#595959","bf4dd98e-6878-4332-a58f-056a2f43a45d":"#434343","082d699b-8ca4-4d1b-94c3-ae00f5282e15":"#262626","1517cf90-4d7e-4d20-8160-e887cd1cefa2":"#1F1F1F","e965651b-2aeb-4bc6-8637-a7d17a654fb8":"#141414","e6bd43f2-634e-4987-90de-ed659f66c51a":"#000000","88bd38e6-7df5-468b-9ae2-7f7deab96f66":"#FF7875","b17515c8-a54a-4d85-a1ca-b0fea4d9cbee":"#00000040","6ae2e58a-e648-49cf-aaac-72492d66021b":"#00000073","3d6e2d51-c517-4722-9d4b-556d0df272f0":"#0000000F","2ea30ff3-433c-451d-9454-37104fb5ae5a":"#000000D9","b387fc35-7b82-4d00-a155-07df460cb5ce":"#00000040","22354eca-80b3-416a-8e6d-817778a35cb4":"#FFFFFF","ffab932d-67d5-4617-b02d-b6f52d5fbc62":"#FF85C0","ab3162f3-640c-4575-9c46-d5f9baddd792":"#FF4D4F","9bc1907e-8c18-43ec-bc3b-84566be3edde":"#FADB14","3cf83d54-f5e5-4e1b-a515-4b08372b5b98":"#FA8C16","63ee83f4-f4df-49f0-9728-0eebd5515a4f":"#13C2C2","ac19a60d-a42a-4916-adc5-e179f1112ccd":"#52C41A","89672868-90bf-4e73-bbab-32ac72d87dd8":"#1890FF","0015825e-fbb5-44dc-be7c-d3353c7f4e8f":"#722ED1","86277f01-cbc2-4f1c-8fa2-def7474ebfac":"#2F54EB","202630df-8aba-4b33-9486-15e920b78fe5":"#EB2F96","c0cb22ea-2278-41b9-980d-497bc6c13d49":"#FA541C","cdc1c01d-e700-48b5-a847-837747d9d7f2":"#FAAD14","1da6f58d-adfc-494a-8aa3-ce60f9d32743":"#A0D911","8a3f760d-5476-4fab-a92d-6cbe4ad85f0f":"#FFD8BF"} : {"f1d91354-d232-4bc9-a592-1c984029f6f0":"#F5F8FF","026ea80f-ab82-4e1d-9ec8-16007b3d9a75":"#EFF6FF","4ae72514-db02-4375-a11e-7dfc9818b82d":"#DBEAFE","614ec867-4753-4950-8abd-74b608489fe3":"#BFDBFE","5f867681-27e9-4b74-a5be-c56f41569809":"#93C5FD","37f808d8-39ea-41fc-9dcb-aee867ec9c5b":"#60A5FA","d947b3c9-8582-4ea2-bdb3-572c07a6d6e2":"#3B82F6","5c90a59f-335d-4d73-b291-726c6ec25216":"#2563EB","d5c2d84b-1183-47f8-92e8-e2435408e0f5":"#1D4ED8","edd09f46-5e05-4507-8bce-b912e578cf4d":"#1E40AF","3f398fc2-c024-4ccf-b5c1-4a3f26c01cb5":"#1E3A8A","ade643e9-cd58-43cd-87e6-8fd0210573be":"#FCFCFD","60037ea1-0828-4b0b-940f-9453c3514f97":"#FFFFFF","e80f17ee-791b-43e7-9c2b-392a3a7e9ed2":"#FAFAFA","0ef1a27a-ac15-4b7d-9434-37ebee00c96c":"#F4F4F5","439d2018-0782-4bdb-a76e-9180bc922eb1":"#E4E4E7","bf94f167-ff14-490a-b5e7-910ebaf8913f":"#D4D4D8","095df436-ad4f-467d-92e0-35fbaaf7b63c":"#A1A1AA","d9b3c0ed-2ace-41b7-8186-2156d100fb11":"#71717A","cd54e007-9433-4f17-861f-df2d990f6c45":"#52525B","6cc4aa91-cf37-4f1f-8449-f63edd3d3e08":"#3F3F46","daebcfd2-0e29-4827-ac6b-f87dc06ec693":"#27272A","07250712-6d2a-4a15-936e-e479a405ea31":"#18181B","7acf0ec8-a924-4b94-9f21-3a474bcba099":"#71717a","15ac5ccd-77a0-42ad-bb1c-23d95b505f16":"#fafafa","b5c3405f-db19-44b6-b49e-c4aaf1b69969":"#E4E4E7","23533b28-5a23-4d42-86bf-4a881df701d9":"#181818","ec0f1b1e-8046-404c-882f-160cb4232495":"#d4d4d8","f6a1bf04-7852-4ac3-b062-949dbfba63e7":"#27a745","74490cca-1dc6-44a0-a329-3a45ab8c4890":"#27A74533","5e7c550c-6607-4f38-ba8b-0bc44f07fcc6":"#27A74580","a71001c0-84ec-4338-8491-47c07a414066":"#dc3545","587c5fde-4d9b-4509-812b-7758b0b06312":"#E6F7FF","c3024a2f-eed0-42fd-b6a5-404eff49c891":"#BAE7FF","010e38e8-99b4-4f17-bd7e-3cb6010f5f1d":"#91D5FF","522c1913-21eb-403b-b0cb-a720063b3c1a":"#69C0FF","41564651-f225-4f9a-a989-1f54852d39ca":"#40A9FF","1c561640-a6d6-4914-8eb7-8cdc86d98ab6":"#1890FF","871b637f-9b2a-4cec-b03e-800f120d7e99":"#096DD9","9f526fa2-8a2d-4e19-9bd7-0189d41ea672":"#0050B3","989c4920-204f-4235-88b9-72d1796be2e6":"#003A8C","5bcc5b1f-ebbf-46b3-b939-cc25442bf3ba":"#002766","885728d3-5862-45c5-9ef9-b13d8a02f42b":"#FF4D4F","e7c64387-36eb-4ad2-be93-d0bab9c3f097":"#FAAD14","09e96658-7a44-4ca4-b426-4811e9a1fbe5":"#52C41A","b7f065cc-ddb0-489a-bcde-2a7aaa9af81b":"#000000D9","defbc6ef-1319-42da-8f30-db555727b8f1":"#FFFFFF","c211b7f5-4762-4094-bdf5-b4f0d263bcbb":"#FAFAFA","8b3c0e00-19be-4e82-ad88-7a92f4582db8":"#F5F5F5","2971e0fa-3223-4d77-8830-9c0759c536cd":"#F0F0F0","ee682ecb-deba-4df9-a326-7afd61a24dd8":"#D9D9D9","cafe44d3-c856-4aff-9be9-2d4251463cb0":"#BFBFBF","0f232106-efd3-433f-a238-80d66c1fd8cf":"#8C8C8C","c5ca2059-2885-4125-974e-608c82d2e603":"#595959","bf4dd98e-6878-4332-a58f-056a2f43a45d":"#434343","082d699b-8ca4-4d1b-94c3-ae00f5282e15":"#262626","1517cf90-4d7e-4d20-8160-e887cd1cefa2":"#1F1F1F","e965651b-2aeb-4bc6-8637-a7d17a654fb8":"#141414","e6bd43f2-634e-4987-90de-ed659f66c51a":"#000000","88bd38e6-7df5-468b-9ae2-7f7deab96f66":"#FF7875","b17515c8-a54a-4d85-a1ca-b0fea4d9cbee":"#00000040","6ae2e58a-e648-49cf-aaac-72492d66021b":"#00000073","3d6e2d51-c517-4722-9d4b-556d0df272f0":"#0000000F","2ea30ff3-433c-451d-9454-37104fb5ae5a":"#000000D9","b387fc35-7b82-4d00-a155-07df460cb5ce":"#00000040","22354eca-80b3-416a-8e6d-817778a35cb4":"#FFFFFF","ffab932d-67d5-4617-b02d-b6f52d5fbc62":"#FF85C0","ab3162f3-640c-4575-9c46-d5f9baddd792":"#FF4D4F","9bc1907e-8c18-43ec-bc3b-84566be3edde":"#FADB14","3cf83d54-f5e5-4e1b-a515-4b08372b5b98":"#FA8C16","63ee83f4-f4df-49f0-9728-0eebd5515a4f":"#13C2C2","ac19a60d-a42a-4916-adc5-e179f1112ccd":"#52C41A","89672868-90bf-4e73-bbab-32ac72d87dd8":"#1890FF","0015825e-fbb5-44dc-be7c-d3353c7f4e8f":"#722ED1","86277f01-cbc2-4f1c-8fa2-def7474ebfac":"#2F54EB","202630df-8aba-4b33-9486-15e920b78fe5":"#EB2F96","c0cb22ea-2278-41b9-980d-497bc6c13d49":"#FA541C","cdc1c01d-e700-48b5-a847-837747d9d7f2":"#FAAD14","1da6f58d-adfc-494a-8aa3-ce60f9d32743":"#A0D911","8a3f760d-5476-4fab-a92d-6cbe4ad85f0f":"#FFD8BF"};
+            /* wwFront:end */
+        }),
+        spacings:
+         /* wwFront:start */
+        // eslint-disable-next-line no-unreachable, no-undef
+        {"acc62aa5-b232-43a5-a026-e3ca0607279c":"2px","bccd5ed7-9608-408c-b186-41991df08f07":"8px","16dbab88-93f3-40c6-8c5c-340b6ac4a2b7":"4px","bedd6004-04b8-43e0-adb0-c75c3c37edcf":"8px","48e98f07-c1d0-41d8-b684-6c326d30c2ef":"12px","df049fe5-2ba1-47aa-b3c9-fbecb3aeb829":"16px","132bca85-f48d-4c4b-b722-f153ef3b46c8":"24px","8aaf6d8e-6e66-44db-87cf-70b5444e3160":"32px","999a334d-a367-4fe8-886c-c5b2699ad5cc":"40px","7108cce7-f73f-4e6f-957f-f8661d538aa3":"48px","801120d1-ca75-4d48-9c94-44f0104b941c":"64px"},
+        /* wwFront:end */
+        typographies:
+         /* wwFront:start */
+        // eslint-disable-next-line no-unreachable, no-undef
+        {"c3860461-d289-4442-82bd-376abb3ef4cb":"500 64px/72px var(--ww-default-font-family, sans-serif)","f1652127-681b-4340-bef0-cf178c687d0f":"600 48px/56px var(--ww-default-font-family, sans-serif)","94b71c5a-7732-4c2f-855e-7cab6a879b84":"500 32px/40px var(--ww-default-font-family, sans-serif)","7c094911-fd12-4b13-958d-dc922f006462":"500 24px/32px var(--ww-default-font-family, sans-serif)","58c75207-b26c-4fef-9edc-389501a204a5":"500 20px/24px var(--ww-default-font-family, sans-serif)","f02a40f5-c495-4809-b759-0b7a9e52b327":"400 18px/24px var(--ww-default-font-family, sans-serif)","501b7263-028e-4ee4-8295-943dffcd1160":"500 16px/22px var(--ww-default-font-family, sans-serif)","baeda51e-4ec3-44e1-8f6a-996a4886fbbb":"500 14px/20px var(--ww-default-font-family, sans-serif)","4ef2d583-123c-42f0-ba5b-63e2b0ec2740":"500 12px/18px var(--ww-default-font-family, sans-serif)","5e696361-d82f-4910-8a67-ab512e1a8442":"400 16px/22px var(--ww-default-font-family, sans-serif)","4dc22ea0-97b6-4f60-ad1d-41cd2847e6a3":"400 14px/20px var(--ww-default-font-family, sans-serif)","1fb7f346-151d-47e4-b090-ffeda015a7e5":"400 12px/18px var(--ww-default-font-family, sans-serif)","ed4dde7d-3e4b-4fa0-88f5-26920230d196":"400 14px/22px var(--ww-default-font-family, sans-serif)","aa1f75a2-ee73-4d63-a1be-95080d1cdf3f":"500 38px/46px var(--ww-default-font-family, sans-serif)","8b95907e-d3d9-4ab2-b53f-37db03a8b16f":"500 30px/40px var(--ww-default-font-family, sans-serif)","83beb3f3-7c93-4717-b6c6-0adc1df31402":"500 24px/32px var(--ww-default-font-family, sans-serif)","05105e42-db29-413c-9548-ccd490087446":"500 20px/28px var(--ww-default-font-family, sans-serif)","ccba8f1c-585c-4812-b32d-ba60e97cce99":"500 16px/24px var(--ww-default-font-family, sans-serif)","ee0c9af0-8a22-4027-abe8-f55bc5c7ffde":"600 14px/22px var(--ww-default-font-family, sans-serif)","78c735a6-241b-4a09-a60c-8a646a106ff1":"400 12px/20px var(--ww-default-font-family, sans-serif)","26009907-48f5-4db2-b952-9f392614f750":"600 16px/24px var(--ww-default-font-family, sans-serif)","6e7b4ec2-27f4-4dc5-b811-48bf29dcc11f":"600 12px/18px var(--ww-default-font-family, sans-serif)","f895a95a-1655-4161-8d9c-ac7f2752b3e6":"400 12px/18px var(--ww-default-font-family, sans-serif)","fc58a6be-096e-4c33-8728-1946519ddfea":"400 16px/22px var(--ww-default-font-family, sans-serif)","c689989c-61b7-4044-a80d-04325d8b9ea7":"400 12px/20px var(--ww-default-font-family, sans-serif)"},
+        /* wwFront:end */
+        browser: computed(() => {
+            const router = wwLib.manager ? wwLib.getEditorRouter() : wwLib.getFrontRouter();
+            const currentRoute = router.currentRoute.value;
+            let currentQueries = currentRoute.query;
+             return {
+                url: window.location.origin + currentRoute.fullPath,
+                path: currentRoute.path,
+                // verify if auth plugin
+                 /* wwFront:start */
+                // eslint-disable-next-line no-dupe-keys
+                source: currentQueries._source,
+                /* wwFront:end */
+                query: currentQueries,
+                domain: window.location.hostname,
+                baseUrl: window.location.origin,
+                breakpoint: wwLib.$store.getters['front/getScreenSize'],
+                environment: wwLib.getEnvironment(),
+                theme: wwLib.$store.getters['front/getTheme'],
+            };
+        }),
+        pwa: services.pwaStore.pwa,
+        screen: services.scrollStore.screen,
+        componentPositionInfo: services.scrollStore.componentPositionInfo,
+    }),
+
+    pageData: computed(() => {
+        const lang = wwLib.$store.getters['front/getLang'];
+        const cmsDataSetPath = wwLib.$store.getters['websiteData/getPage'].cmsDataSetPath;
+        if (!cmsDataSetPath) {
+            return { lang };
+        }
+
+        return { lang, data: wwLib.$store.getters['data/getPageCollectionData'] };
+    }),
+
+    getEnvironment() {
+        return getRuntimeEnvironment();
+    },
+
+    useBaseTag() {
+        return (
+            wwLib.getEnvironment() === 'production' &&
+            window.wwg_designInfo.baseTag &&
+            window.wwg_designInfo.baseTag.href
+        );
+    },
+
+    getBaseTag() {
+        let baseTag = window.wwg_designInfo.baseTag?.href || '';
+        if (!baseTag.startsWith('/')) {
+            baseTag = '/' + baseTag;
+        }
+        if (!baseTag.endsWith('/')) {
+            baseTag += '/';
+        }
+        return baseTag;
+    },
+
+    /**
+     * @PUBLIC_API
+     */
+    getFrontWindow() {
+        // This is called for every compiled CSS declaration and Vue timing measurement.
+        // In the canvas document there is no nested editor iframe: a class selector would
+        // scan the entire rendered page on every call. The editor iframe has a fixed ID.
+        return document.getElementById('ww-manager-iframe')?.contentWindow || window;
+    },
+
+    /**
+     * @PUBLIC_API
+     */
+    getFrontDocument() {
+        return this.getFrontWindow().document;
+    },
+
+    /**
+     * @PUBLIC_API
+     */
+    getFrontRouter() {
+        return this.front.router;
+    },
+
+    /**
+     * @PUBLIC_API
+     */
+    getEditorWindow() {
+         // eslint-disable-next-line no-unreachable
+        return null;
+    },
+
+    /**
+     * @PUBLIC_API
+     */
+    getEditorDocument() {
+         // eslint-disable-next-line no-unreachable
+        return null;
+    },
+
+    /**
+     * @PUBLIC_API
+     */
+    getEditorRouter() {
+        return this.editor.router;
+    },
+
+    /**
+     * @PUBLIC_API
+     * @DEPRECATED wwLib.wwApp.goTo
+     */
+    goTo(...args) {
+        wwLib.wwLog.warn('wwLib.goTo is DEPRECATED, use wwLib.wwApp.goTo instead');
+        wwLib.wwApp.goTo(...args);
+    },
+
+    /**
+     * @PUBLIC_API
+     * @DEPRECATED wwLib.wwUtils.getStyleFromToken
+     */
+    getStyleFromToken(...args) {
+        // wwLib.wwLog.warn('wwLib.getStyleFromToken is DEPRECATED, use wwLib.wwUtils.getStyleFromToken instead');
+        return wwLib.wwUtils.getStyleFromToken(...args);
+    },
+
+    /**
+     * @PUBLIC_API
+     * @DEPRECATED wwLib.wwUtils.getTypoFromToken
+     */
+    getTypoFromToken(...args) {
+        // wwLib.wwLog.warn('wwLib.getTypoFromToken is DEPRECATED, use wwLib.wwUtils.getTypoFromToken instead');
+        return wwLib.wwUtils.getTypoFromToken(...args);
+    },
+
+    /**
+     * @PUBLIC_API
+     * @DEPRECATED
+     */
+    element(value) {
+        wwLib.wwLog.warn('wwLib.element is DEPRECATED');
+        if (typeof value === 'object') {
+            return { isWwObject: true, ...value };
+        } else {
+            return { isWwObject: true, type: value };
+        }
+    },
+
+    /**
+     * @PUBLIC_API
+     * @DEPRECATED wwLib.wwUtils.resolveObjectPropertyPath
+     */
+    resolveObjectPropertyPath(...args) {
+        // wwLib.wwLog.warn(
+        //     'wwLib.resolveObjectPropertyPath is DEPRECATED, use wwLib.wwUtils.resolveObjectPropertyPath instead'
+        // );
+        return wwLib.wwUtils.resolveObjectPropertyPath(...args);
+    },
+
+    /**
+     * @PUBLIC_API
+     * @DEPRECATED wwLib.wwWorkflow.executeGlobal
+     */
+    async executeWorkflow(...args) {
+        wwLib.wwLog.warn('wwLib.executeWorkflow is DEPRECATED, use wwLib.wwWorkflow.executeGlobal instead');
+        return wwLib.wwWorkflow.executeGlobal(...args);
+    },
+
+    /**
+     * @PUBLIC_API
+     * @EDITOR
+     * @DEPRECATED wwLib.wwEditor.findParentUidByFlag
+     */
+    findParentUidByFlag(...args) {
+        wwLib.wwLog.warn('wwLib.wwEditor.findParentUidByFlag is DEPRECATED, use wwLib.findParentUidByFlag instead');
+        return wwLib.wwEditor.findParentUidByFlag(...args);
+    },
+
+    /**
+     * @PUBLIC_API
+     * @EDITOR
+     * @DEPRECATED wwLib.wwEditor.selectParentByFlag
+     */
+    selectParentByFlag(...args) {
+        wwLib.wwLog.warn('wwLib.wwEditor.selectParentByFlag is DEPRECATED, use wwLib.selectParentByFlag instead');
+        return wwLib.wwEditor.selectParentByFlag(...args);
+    },
+
+    /**
+     * @PUBLIC_API
+     * @DEPRECATED wwLib.wwElement.useCreate
+     */
+    useCreateElement() {
+        wwLib.wwLog.warn('wwLib.useCreateElement is DEPRECATED, use wwLib.wwElement.useCreate instead');
+        return this.wwElement.useCreate();
+    },
+
+    /**
+     * @PUBLIC_API
+     * @DEPRECATED wwLib.wwElement.useLayoutStyle
+     */
+    useLayoutStyle() {
+        wwLib.wwLog.warn('wwLib.useLayoutStyle is DEPRECATED, use wwLib.wwElement.useLayoutStyle instead');
+        return wwLib.wwElement.useLayoutStyle();
+    },
+
+    /**
+     * @PUBLIC_API
+     */
+    useIcons() {
+        const store = useIconsStore();
+        return {
+            getIcon: store.getIcon,
+        };
+    },
+};
+
+function pageSanitizer(page) {
+    const keysToInclude = [
+        'id',
+        'name',
+        'folder',
+        'metaImage',
+        'pageLoaded',
+        'paths',
+        'langs',
+        'meta',
+        'title',
+        'sections',
+        'pageUserGroups',
+    ];
+
+    const _page = {};
+    keysToInclude.forEach(key => {
+        _page[key] = page[key];
+    });
+
+    _page.meta && delete _page.meta.__typename;
+    for (const section of _page.sections || []) {
+        delete section.__typename;
+    }
+
+    const lang = wwLib.$store.getters['front/getLang'];
+    if (_page.paths) _page.path = _page.paths[lang] || _page.paths.default;
+    else _page.path = null;
+
+    _page.lang = lang;
+
+    return _page;
+}

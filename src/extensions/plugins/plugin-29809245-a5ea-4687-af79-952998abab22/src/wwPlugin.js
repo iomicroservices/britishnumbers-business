@@ -7,8 +7,6 @@ export default {
         Airtable API
     \================================================================================================*/
     async createRecord({ collectionId, data }, wwUtils) {
-        const websiteId = wwLib.wwWebsiteData.getInfo().id;
-
         let response = null;
         wwUtils?.log('info', `Creating a record for _wwCollection(${collectionId})`, {
             preview: data,
@@ -17,7 +15,7 @@ export default {
 
         /* wwFront:start */
         response = await axios.post(
-            `//${window.location.hostname}/ww/cms_data_sets/${collectionId}/airtable/record`,
+            `${window.location.origin}/ww/cms_data_sets/${collectionId}/airtable/record`,
             { data }
         );
         /* wwFront:end */
@@ -35,8 +33,6 @@ export default {
         return record;
     },
     async updateRecord({ collectionId, recordId, data }, wwUtils) {
-        const websiteId = wwLib.wwWebsiteData.getInfo().id;
-
         let response = null;
         wwUtils?.log('info', `Updating record ${recordId} for _wwCollection(${collectionId})`, {
             preview: data,
@@ -44,7 +40,7 @@ export default {
         });
         /* wwFront:start */
         response = await axios.patch(
-            `//${window.location.hostname}/ww/cms_data_sets/${collectionId}/airtable/record/${recordId}`,
+            `${window.location.origin}/ww/cms_data_sets/${collectionId}/airtable/record/${recordId}`,
             { data }
         );
         /* wwFront:end */
@@ -60,13 +56,11 @@ export default {
         return record;
     },
     async deleteRecord({ collectionId, recordId }, wwUtils) {
-        const websiteId = wwLib.wwWebsiteData.getInfo().id;
-
         let response = null;
         wwUtils?.log('info', `Deleting record ${recordId} for _wwCollection(${collectionId})`, { type: 'request' });
         /* wwFront:start */
         response = await axios.delete(
-            `//${window.location.hostname}/ww/cms_data_sets/${collectionId}/airtable/record/${recordId}`
+            `${window.location.origin}/ww/cms_data_sets/${collectionId}/airtable/record/${recordId}`
         );
         /* wwFront:end */
 
@@ -85,10 +79,9 @@ export default {
         return record;
     },
     async syncRecord({ collectionId, recordId }, wwUtils) {
-        const websiteId = wwLib.wwWebsiteData.getInfo().id;
         wwUtils?.log('info', `Syncing record ${recordId} for _wwCollection(${collectionId})`, { type: 'request' });
         const response = await axios.get(
-            `${wwLib.wwApiRequests._getPluginsUrl()}/hook/designs/${websiteId}/cms_data_sets/${collectionId}/sync/${recordId}/update`
+            `${window.location.origin}/ww/cms_data_sets/${collectionId}/airtable/record/${recordId}`
         );
         const record = response.data.data;
 

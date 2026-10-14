@@ -74,7 +74,7 @@ export default {
          /* wwFront:start */
         // eslint-disable-next-line no-unreachable
         const { data: dataFromPreview } = await axios.post(
-            `//${window.location.hostname}/ww/cms_data_sets/${id}/fetch?limit=${limit}&offset=${offset}`,
+            `${window.location.origin}/ww/cms_data_sets/${id}/fetch?limit=${limit}&offset=${offset}`,
             { variables }
         );
         return dataFromPreview;

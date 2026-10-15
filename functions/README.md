@@ -70,6 +70,7 @@ Nuxt search calls the British Numbers memorable API. The Supabase query remains 
 
 `GET https://api.britishnumbers.com/rest/v2/mobile/memorable` with header `X-API-Key`.
 
+- `price_gte` and `price_lte` are optional price bounds
 - `q` is sent as `search` (letters, digits, and commas)
 - `match=prefix`, `match=number`, or `match=last_six` is sent as `type`
 - `page` starts at 1. Each page is 100 rows, sent as `range=0-99`, `100-199`, and so on

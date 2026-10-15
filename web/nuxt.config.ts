@@ -13,6 +13,12 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  fonts: {
+    families: [
+      { name: 'Poppins', provider: 'fontsource', weights: [400, 500, 600] }
+    ]
+  },
+
   vite: {
     server: {
       proxy: devApiOrigin

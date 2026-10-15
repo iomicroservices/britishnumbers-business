@@ -53,6 +53,8 @@ async function readQuery(request) {
     let match = url.searchParams.get('match') || 'number';
     let page = url.searchParams.get('page') || '';
     let pageSize = url.searchParams.get('pageSize') || '';
+    let priceGte = url.searchParams.get('price_gte') || '';
+    let priceLte = url.searchParams.get('price_lte') || '';
 
     if (request.method === 'POST') {
         try {
@@ -61,6 +63,8 @@ async function readQuery(request) {
             match = body?.match || match;
             page = body?.page ?? page;
             pageSize = body?.pageSize ?? pageSize;
+            priceGte = body?.price_gte ?? priceGte;
+            priceLte = body?.price_lte ?? priceLte;
         } catch {
             // ignore invalid JSON
         }
@@ -71,7 +75,15 @@ async function readQuery(request) {
         match: MATCH_COLUMNS[match] ? match : 'number',
         page: readPositiveInt(page, 1),
         pageSize: Math.min(readPositiveInt(pageSize, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE),
+        priceGte: readOptionalNumber(priceGte),
+        priceLte: readOptionalNumber(priceLte),
     };
+}
+
+function readOptionalNumber(value) {
+    if (value === '' || value == null) return undefined;
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function mapRows(body) {
@@ -84,13 +96,15 @@ function mapRows(body) {
     }));
 }
 
-async function searchBritishNumbers(env, { search, match, page, pageSize }) {
+async function searchBritishNumbers(env, { search, match, page, pageSize, priceGte, priceLte }) {
     const offset = (page - 1) * pageSize;
     const upstream = new URL(MEMORABLE_URL);
     upstream.searchParams.set('search', search);
     upstream.searchParams.set('type', match);
     upstream.searchParams.set('match', 'fuzzy');
     upstream.searchParams.set('range', `${offset}-${offset + pageSize - 1}`);
+    if (priceGte != null) upstream.searchParams.set('price_gte', String(priceGte));
+    if (priceLte != null) upstream.searchParams.set('price_lte', String(priceLte));
 
     const response = await fetch(upstream.toString(), {
         headers: {

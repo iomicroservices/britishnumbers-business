@@ -109,7 +109,12 @@ export function useMobileShop() {
     }))
   }
 
-  async function search(query: string, match: MobileMatch, nextPage = 1) {
+  async function search(
+    query: string,
+    match: MobileMatch,
+    nextPage = 1,
+    price: { gte?: number, lte?: number } = {}
+  ) {
     searching.value = true
     error.value = ''
     try {
@@ -123,7 +128,9 @@ export function useMobileShop() {
           q: query,
           match,
           page: nextPage,
-          pageSize: MOBILE_PAGE_SIZE
+          pageSize: MOBILE_PAGE_SIZE,
+          ...(price.gte != null ? { price_gte: price.gte } : {}),
+          ...(price.lte != null ? { price_lte: price.lte } : {})
         }
       })
       const rows = response.data || []

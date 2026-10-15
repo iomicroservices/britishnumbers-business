@@ -1,0 +1,109 @@
+<script setup lang="ts">
+useHead({
+  meta: [
+    { name: 'viewport', content: 'width=device-width, initial-scale=1' }
+  ],
+  link: [
+    { rel: 'icon', href: '/favicon.ico' }
+  ],
+  htmlAttrs: {
+    lang: 'en'
+  }
+})
+
+const title = 'British Numbers'
+const description = 'Virtual landline and memorable mobile numbers for small business.'
+
+useSeoMeta({
+  title,
+  description,
+  ogTitle: title,
+  ogDescription: description
+})
+
+const nav = [
+  { label: 'Home', to: '/' },
+  { label: 'Telephone', to: '/telephone-numbers' },
+  { label: 'Mobile', to: '/mobile-numbers' },
+  { label: 'Special numbers', to: '/special-numbers' }
+]
+</script>
+
+<template>
+  <UApp>
+    <UHeader>
+      <template #left>
+        <NuxtLink
+          to="/"
+          class="flex items-center gap-2 rounded-md -ms-1 p-1 focus-visible:outline-3 focus-visible:outline-primary/25"
+        >
+          <img
+            src="/logo.png"
+            alt=""
+            class="size-9"
+          >
+          <span class="text-base font-semibold text-highlighted">British Numbers</span>
+        </NuxtLink>
+      </template>
+
+      <UNavigationMenu :items="nav" />
+
+      <template #right>
+        <UColorModeButton />
+      </template>
+    </UHeader>
+
+    <UMain>
+      <NuxtPage />
+    </UMain>
+
+    <UFooter>
+      <template #top>
+        <UContainer>
+          <div class="flex flex-col gap-2 py-8">
+            <h2 class="text-lg font-semibold text-highlighted">
+              Need a hand?
+            </h2>
+            <p class="max-w-2xl text-sm text-muted">
+              Our super helpful team is always a call away on
+              <a
+                href="tel:03337893330"
+                class="text-primary font-medium"
+              >0333 789 3330</a>
+              or email us
+              <a
+                href="mailto:info@britishnumbers.com"
+                class="text-primary font-medium"
+              >info@britishnumbers.com</a>
+            </p>
+          </div>
+        </UContainer>
+      </template>
+
+      <template #left>
+        <p class="text-sm text-muted">
+          Bona Fides Solutions Ltd © All rights reserved
+        </p>
+      </template>
+
+      <template #right>
+        <UButton
+          to="https://www.facebook.com/britishnumbers/"
+          target="_blank"
+          icon="i-simple-icons-facebook"
+          aria-label="Facebook"
+          color="neutral"
+          variant="ghost"
+        />
+        <UButton
+          to="https://www.instagram.com/britishnumbers/"
+          target="_blank"
+          icon="i-simple-icons-instagram"
+          aria-label="Instagram"
+          color="neutral"
+          variant="ghost"
+        />
+      </template>
+    </UFooter>
+  </UApp>
+</template>

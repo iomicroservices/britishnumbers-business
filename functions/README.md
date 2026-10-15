@@ -13,6 +13,8 @@ In **Workers & Pages → your project → Settings → Environment variables** (
 | `COMPANIES_HOUSE_API_KEY` | Secret | Companies House API key (username only; password empty) |
 | `MAKE_CHECKOUT_WEBHOOK_URL` | Secret | Full Make.com webhook URL for checkout / lead submit |
 | `TAMAR_API_KEY` | Secret | Tamar API key (`user:pass` or username-only) |
+| `SUPABASE_URL` | Plain text | Supabase project URL for the mobile number catalogue |
+| `SUPABASE_ANON_KEY` | Secret | Supabase anon key (read-only via row security) |
 
 Airtable token scopes needed:
 
@@ -40,6 +42,7 @@ Expired sessions are treated as invalid on ensure/GET; rows are not deleted auto
 |--------|------|
 | `GET` / `POST` | `/api/companies-house?q=...` |
 | `GET` / `POST` | `/api/landline?areaCode=...` |
+| `GET` / `POST` | `/api/mobile?q=...&match=number` |
 | `POST` | `/api/checkout` |
 | `POST` | `/ww/session/ensure` |
 | `POST` | `/ww/cms_data_sets/:collectionId/fetch` |
@@ -59,6 +62,15 @@ Frontend collection `apiLandline` calls same-origin `/api/landline` (no Tamar se
 - `GET https://api.tamar.co.uk/list/available/{areaCode}` with Basic auth
 - Transforms `{ "01144371000": "600", ... }` → `[{ "number": "01144371000", "price": 600 }, ...]`
 - Any `grade` query from the frontend is ignored (the app filters Bronze/Silver/Gold/Platinum by price client-side)
+
+### Mobile numbers (`/api/mobile`)
+
+Searches the Supabase `mobile_numbers` table. Available rows only, cheapest first, 100 max.
+
+- `match=prefix` — first part of the number
+- `match=number` — anywhere in the number
+- `match=last_six` — last part of the number
+- `q` is digits only; at least 2 are required
 
 ### Make.com checkout
 

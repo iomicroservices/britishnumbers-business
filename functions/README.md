@@ -11,6 +11,8 @@ In **Workers & Pages → your project → Settings → Environment variables** (
 | `AIRTABLE_TOKEN` | Secret | Airtable personal access token |
 | `SESSION_TTL_DAYS` | Plain text (optional) | Session lifetime in days (default `7`) |
 | `COMPANIES_HOUSE_API_KEY` | Secret | Companies House API key (username only; password empty) |
+| `MAKE_LANDLINE_WEBHOOK_URL` | Secret | Full Make.com webhook URL for landline search |
+| `MAKE_CHECKOUT_WEBHOOK_URL` | Secret | Full Make.com webhook URL for checkout / lead submit |
 
 Airtable token scopes needed:
 
@@ -37,6 +39,8 @@ Expired sessions are treated as invalid on ensure/GET; rows are not deleted auto
 | Method | Path |
 |--------|------|
 | `GET` / `POST` | `/api/companies-house?q=...` |
+| `GET` / `POST` | `/api/make/landline?areaCode=...&grade=...` |
+| `POST` | `/api/make/checkout` |
 | `POST` | `/ww/session/ensure` |
 | `POST` | `/ww/cms_data_sets/:collectionId/fetch` |
 | `POST` | `/ww/cms_data_sets/:collectionId/airtable/record` |
@@ -47,6 +51,13 @@ Expired sessions are treated as invalid on ensure/GET; rows are not deleted auto
 ### Companies House
 
 Frontend collection `companiesHouse` calls same-origin `/api/companies-house` (no API key in the browser). The Function adds Basic auth and forwards to Companies House search.
+
+### Make.com
+
+Webhook URLs stay in Cloudflare secrets (not in page JSON). Frontend calls:
+
+- Collection `apiLandline` → `GET /api/make/landline` (forwards `areaCode`, `grade`)
+- Workflow action `send to make` → `POST /api/make/checkout` (forwards JSON body)
 
 ## Smoke test after deploy
 
@@ -77,10 +88,25 @@ curl -s -X POST \
 ### Companies House smoke test
 
 ```bash
-curl -s "$BASE/api/companies-house?q=british+numbers"
+curl.exe -s "$BASE/api/companies-house?q=british+numbers"
 ```
 
 Expect a JSON payload with an `items` array.
+
+### Make.com smoke tests
+
+```bash
+# Landline search (use a real areaCode/grade your scenario expects)
+curl.exe -s "$BASE/api/make/landline?areaCode=020&grade=gold"
+
+# Checkout / lead submit
+curl.exe -s -X POST "$BASE/api/make/checkout" \
+  -H "content-type: application/json" \
+  -d "{\"email\":\"test@example.com\",\"type\":\"mobile\",\"source\":\"smoke-test\"}"
+```
+
+
+Expect JSON (or `{ ok: true, message: "Accepted" }` if Make returns plain text). Missing secrets return `500` with a clear error.
 
 ## Manual UI checks
 
@@ -89,3 +115,5 @@ Expect a JSON payload with an `items` array.
 3. Add to basket still works
 4. Network tab: no open `/fetch` dumping full sessions/basket tables
 5. Company search returns Companies House results (no WeWeb/`data.weweb.io` calls)
+6. Telephone Numbers landline search hits `/api/make/landline` (not `hook.eu1.make.com`)
+7. Checkout / send-to-make on mobile, telephone, special hits `/api/make/checkout`

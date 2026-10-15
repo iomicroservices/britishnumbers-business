@@ -1,23 +1,9 @@
 {
-    "9c40819b-4a8f-468f-9ba5-4b9699f3361f": {
-        "id": "9a010a32-6673-404a-b456-b69564c85bf7",
-        "name": "Charts",
-        "designId": "9fb21d2f-82fd-4ea2-93ac-b7a3de357abf",
-        "pluginId": "9c40819b-4a8f-468f-9ba5-4b9699f3361f",
-        "publicData": {}
-    },
     "2bd1c688-31c5-443e-ae25-59aa5b6431fb": {
         "id": "02845568-1b38-4c32-a5cd-aa84d8ad8094",
         "name": "REST API",
         "designId": "9fb21d2f-82fd-4ea2-93ac-b7a3de357abf",
         "pluginId": "2bd1c688-31c5-443e-ae25-59aa5b6431fb",
-        "publicData": {}
-    },
-    "d66a250d-8468-469e-ad33-ee028f632398": {
-        "id": "d806d563-a613-419a-a969-c1971eb5ce9f",
-        "name": "OpenAI",
-        "designId": "9fb21d2f-82fd-4ea2-93ac-b7a3de357abf",
-        "pluginId": "d66a250d-8468-469e-ad33-ee028f632398",
         "publicData": {}
     },
     "29809245-a5ea-4687-af79-952998abab22": {

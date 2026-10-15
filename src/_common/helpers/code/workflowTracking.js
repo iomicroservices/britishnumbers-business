@@ -3,10 +3,8 @@
 // Pure auth integrations (null): any action qualifies.
 // Mixed integrations (string prefix): only actions starting with the prefix qualify.
 const AUTH_INTEGRATIONS = {
-    'weweb-auth': null,
     auth0: null,
     openid: null,
-    'custom-auth': null,
     supabase: 'auth-',
     xano: 'auth-',
 };

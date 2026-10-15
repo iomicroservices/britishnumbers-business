@@ -16,6 +16,24 @@ function getWebhookUrl(env) {
     return url;
 }
 
+/** Frontend workflows open context.workflow[...].result.data */
+function looksLikeUrl(value) {
+    return typeof value === 'string' && /^https?:\/\//i.test(value.trim());
+}
+
+function normalizeCheckoutBody(body) {
+    if (looksLikeUrl(body)) {
+        return { data: body.trim() };
+    }
+    if (body && typeof body === 'object' && !Array.isArray(body) && looksLikeUrl(body.data)) {
+        return body;
+    }
+    if (body && typeof body === 'object' && !Array.isArray(body) && looksLikeUrl(body.url) && !body.data) {
+        return { ...body, data: body.url.trim() };
+    }
+    return body;
+}
+
 async function handleCheckout(request, env) {
     if (request.method !== 'POST') {
         return json({ error: 'Method not allowed' }, 405);
@@ -34,7 +52,7 @@ async function handleCheckout(request, env) {
         body: bodyText || undefined,
     });
 
-    const text = await response.text();
+    const text = (await response.text()).trim();
     const upstreamType = response.headers.get('content-type') || '';
 
     if (upstreamType.includes('application/json')) {
@@ -42,19 +60,23 @@ async function handleCheckout(request, env) {
         try {
             body = text ? JSON.parse(text) : null;
         } catch {
-            body = { error: text || 'Invalid upstream response' };
+            body = looksLikeUrl(text) ? { data: text } : { error: text || 'Invalid upstream response' };
         }
-        return json(body, response.status);
+        return json(normalizeCheckoutBody(body), response.status);
     }
 
     if (!response.ok) {
         return json({ error: text || `Make checkout request failed (${response.status})` }, response.status);
     }
 
-    // Make custom webhooks often respond with plain "Accepted"
+    // Make often returns a bare checkout URL (or "Accepted") as plain text
     try {
-        return json(text ? JSON.parse(text) : { ok: true }, response.status);
+        const parsed = text ? JSON.parse(text) : { ok: true };
+        return json(normalizeCheckoutBody(parsed), response.status);
     } catch {
+        if (looksLikeUrl(text)) {
+            return json({ data: text }, response.status);
+        }
         return json({ ok: true, message: text || 'Accepted' }, response.status);
     }
 }

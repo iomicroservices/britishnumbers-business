@@ -4,6 +4,8 @@ useSeoMeta({
   description: 'Find a memorable mobile number by the digits you know, a word on the keypad, or the start, middle, and end you have in mind.'
 })
 
+const { shopLink } = useMobileSearchQuery()
+
 const places = [
   {
     title: 'Anywhere',
@@ -148,7 +150,7 @@ const patterns = [
       description="Search the digits you remember, a word from the keypad, or the exact start and end you have in mind."
       :links="[{
         label: 'Search numbers',
-        to: '/mobile-numbers',
+        to: shopLink,
         size: 'xl',
         trailingIcon: 'i-lucide-arrow-right'
       }]"
@@ -270,7 +272,7 @@ const patterns = [
       variant="subtle"
       :links="[{
         label: 'Search numbers',
-        to: '/mobile-numbers',
+        to: shopLink,
         size: 'lg',
         trailingIcon: 'i-lucide-arrow-right'
       }]"

@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import type { MobileMatch } from '../../composables/useMobileShop'
+import { mobileSearchQuery, readMobileSearch, sameMobileSearch, type MobileSearchMode } from '../../composables/useMobileSearchQuery'
 
 useSeoMeta({
   title: 'Mobile numbers · British Numbers',
@@ -21,14 +22,22 @@ const {
   addToBasket,
   removeFromBasket
 } = useMobileShop()
-type SearchMode = 'number' | 'multi' | 'prefix' | 'last_six'
+type SearchMode = MobileSearchMode
+
+function cleanPart(value: string) {
+  return value.replace(/[^A-Za-z0-9]/g, '').slice(0, 11)
+}
 
 const route = useRoute()
-const query = ref('07')
-const mode = ref<SearchMode>('number')
-const starts = ref('')
-const contains = ref('')
-const ends = ref('')
+const router = useRouter()
+const { withSearch } = useMobileSearchQuery()
+const initialSearch = readMobileSearch(route.query)
+const initialParts = initialSearch.q.split(',')
+const query = ref(initialSearch.mode === 'multi' ? '07' : initialSearch.q)
+const mode = ref<SearchMode>(initialSearch.mode)
+const starts = ref(initialSearch.mode === 'multi' ? cleanPart(initialParts[0] || '') : '')
+const contains = ref(initialSearch.mode === 'multi' ? cleanPart(initialParts[1] || '') : '')
+const ends = ref(initialSearch.mode === 'multi' ? cleanPart(initialParts[2] || '') : '')
 
 const matchOptions = [
   { label: 'Anywhere', value: 'number' },
@@ -36,10 +45,6 @@ const matchOptions = [
   { label: 'Prefix', value: 'prefix' },
   { label: 'Ending', value: 'last_six' }
 ]
-
-function cleanPart(value: string) {
-  return value.replace(/[^A-Za-z0-9]/g, '').slice(0, 11)
-}
 
 function multiTerm() {
   return [cleanPart(starts.value), cleanPart(contains.value), cleanPart(ends.value)].join(',')
@@ -57,10 +62,10 @@ function currentTerm() {
 const priceOpen = ref(false)
 const filtersOpen = ref(false)
 const modeLabel = computed(() => matchOptions.find(option => option.value === mode.value)?.label ?? 'Anywhere')
-const priceGte = ref('')
-const priceLte = ref('')
-const appliedGte = ref<number>()
-const appliedLte = ref<number>()
+const priceGte = ref(initialSearch.min != null ? String(initialSearch.min) : '')
+const priceLte = ref(initialSearch.max != null ? String(initialSearch.max) : '')
+const appliedGte = ref<number | undefined>(initialSearch.min)
+const appliedLte = ref<number | undefined>(initialSearch.max)
 
 function parsePrice(value: string | number | null | undefined) {
   if (value == null || value === '') return undefined
@@ -116,6 +121,37 @@ const remainingLabel = computed(() => `${remaining.value.toLocaleString('en-GB')
 const hasLoaded = ref(false)
 const showSkeleton = computed(() => !hasLoaded.value || (searching.value && results.value.length === 0))
 
+let applyingMode = false
+let resetting = false
+
+function currentParams() {
+  return {
+    q: currentTerm() || '07',
+    mode: mode.value,
+    min: appliedGte.value,
+    max: appliedLte.value
+  }
+}
+
+function syncFromRoute() {
+  const next = readMobileSearch(route.query)
+  const parts = next.q.split(',')
+  applyingMode = true
+  mode.value = next.mode
+  if (next.mode === 'multi') {
+    starts.value = cleanPart(parts[0] || '')
+    contains.value = cleanPart(parts[1] || '')
+    ends.value = cleanPart(parts[2] || '')
+  } else {
+    query.value = next.q
+  }
+  appliedGte.value = next.min
+  appliedLte.value = next.max
+  priceGte.value = next.min != null ? String(next.min) : ''
+  priceLte.value = next.max != null ? String(next.max) : ''
+  applyingMode = false
+}
+
 async function showNumbers() {
   try {
     await Promise.all([
@@ -128,15 +164,17 @@ async function showNumbers() {
 }
 
 if (import.meta.client) {
-  watch(() => route.path, (path) => {
-    if (path === '/mobile-numbers') showNumbers()
+  watch(() => route.fullPath, () => {
+    if (route.path !== '/mobile-numbers') return
+    if (!sameMobileSearch(mobileSearchQuery(readMobileSearch(route.query)), mobileSearchQuery(currentParams()))) {
+      syncFromRoute()
+    }
+    showNumbers()
   }, { immediate: true })
 }
 
 const SEARCH_DEBOUNCE_MS = 1000
 let searchTimer: ReturnType<typeof setTimeout> | undefined
-let applyingMode = false
-let resetting = false
 
 function clearSearchTimer() {
   if (searchTimer) clearTimeout(searchTimer)
@@ -155,11 +193,13 @@ async function onSearch() {
   const term = currentTerm()
   const hasDigits = term.replace(/[^A-Za-z0-9]/g, '').length > 0
   if (!hasDigits || (mode.value !== 'multi' && term.length < 2)) return
-  try {
-    await search(term, apiMatch(), 1, selectedPrice())
-  } finally {
-    hasLoaded.value = true
+  const next = mobileSearchQuery(currentParams())
+  const current = mobileSearchQuery(readMobileSearch(route.query))
+  if (route.path === '/mobile-numbers' && sameMobileSearch(next, current)) {
+    await showNumbers()
+    return
   }
+  await router.replace({ path: '/mobile-numbers', query: next })
 }
 
 watch(query, () => {
@@ -192,7 +232,7 @@ function resetFilters() {
 }
 
 watch(mode, (next, prev) => {
-  if (resetting) return
+  if (resetting || applyingMode) return
   applyingMode = true
   if (next === 'multi' && prev !== 'multi') {
     const parts = query.value.replace(/[^A-Za-z0-9,]/g, '').split(',')
@@ -242,7 +282,7 @@ async function loadMore() {
       <div class="flex items-center justify-between gap-3 sm:contents">
         <UTooltip class="shrink-0 sm:order-1">
           <UButton
-            to="/mobile-numbers/search-guide"
+            :to="withSearch('/mobile-numbers/search-guide')"
             icon="i-lucide-info"
             color="info"
             variant="soft"
@@ -253,7 +293,7 @@ async function loadMore() {
           <template #content>
             <span>Match the start, middle, or end to pinpoint your number. </span>
             <NuxtLink
-              to="/mobile-numbers/search-guide"
+              :to="withSearch('/mobile-numbers/search-guide')"
               class="font-medium underline"
             >
               Search guide
@@ -475,7 +515,7 @@ async function loadMore() {
             >
               <div class="flex items-center justify-between gap-3">
                 <NuxtLink
-                  :to="`/mobile-numbers/${item.number.replace(/\D/g, '')}`"
+                  :to="withSearch(`/mobile-numbers/${item.number.replace(/\D/g, '')}`)"
                   class="min-w-0 text-base font-semibold tabular-nums tracking-wide whitespace-nowrap text-highlighted hover:text-primary sm:text-lg"
                 >
                   {{ formatNumber(item.number) }}
@@ -511,93 +551,36 @@ async function loadMore() {
             </UCard>
           </li>
           <li v-if="remaining > 0">
-            <button
-              type="button"
-              class="group h-full w-full text-left"
-              :disabled="searching"
-              @click="loadMore"
+            <UCard
+              class="bg-success text-white ring-success transition hover:bg-success/90"
+              :ui="{ body: 'p-3 sm:p-4' }"
             >
-              <UCard
-                class="h-full bg-success text-white ring-success transition group-hover:-translate-y-0.5 group-hover:bg-success/90 group-disabled:translate-y-0"
-                :ui="{ root: 'relative overflow-hidden', body: 'flex h-full items-center p-4 pe-14 sm:p-4 sm:pe-14' }"
-              >
-                <div>
-                  <p class="text-lg font-semibold">
-                    {{ loadingMore ? 'Loading…' : 'Load more' }}
-                  </p>
-                  <p class="text-sm text-white/80">
-                    {{ remainingLabel }}
-                  </p>
-                </div>
-                <UIcon
-                  v-if="loadingMore"
-                  name="i-lucide-loader-circle"
-                  class="absolute end-4 top-1/2 size-6 -translate-y-1/2 animate-spin"
-                />
-                <span
-                  v-else
-                  class="bn-chevron-lane pointer-events-none absolute inset-y-0 end-4 w-5"
-                  aria-hidden="true"
+              <div class="flex items-center justify-between gap-3">
+                <button
+                  type="button"
+                  class="min-w-0 truncate text-left text-base font-semibold tracking-wide whitespace-nowrap text-white sm:text-lg"
+                  :disabled="searching && !loadingMore"
+                  @click="loadMore"
                 >
-                  <span
-                    v-for="copy in 2"
-                    :key="copy"
-                    class="bn-chevron-stream absolute inset-x-0 top-0 flex flex-col items-center"
-                    :style="{ animationDelay: copy === 2 ? '-0.9s' : '0s' }"
-                  >
-                    <UIcon
-                      name="i-lucide-chevron-down"
-                      class="-mb-2 size-4 opacity-25"
-                    />
-                    <UIcon
-                      name="i-lucide-chevron-down"
-                      class="-mb-2 size-4 opacity-55"
-                    />
-                    <UIcon
-                      name="i-lucide-chevron-down"
-                      class="size-5"
-                    />
-                  </span>
-                </span>
-              </UCard>
-            </button>
+                  {{ loadingMore ? 'Loading…' : 'Load more' }}
+                  <span class="text-sm font-medium text-white/80">· {{ remainingLabel }}</span>
+                </button>
+                <UButton
+                  :icon="loadingMore ? undefined : 'i-lucide-chevron-down'"
+                  color="success"
+                  variant="solid"
+                  class="shrink-0"
+                  :ui="{ leadingIcon: loadingMore ? '' : 'animate-bounce motion-reduce:animate-none' }"
+                  :loading="loadingMore"
+                  :disabled="searching && !loadingMore"
+                  aria-label="Load more"
+                  @click="loadMore"
+                />
+              </div>
+            </UCard>
           </li>
         </ul>
     </section>
     </UContainer>
   </div>
 </template>
-
-<style>
-.bn-chevron-lane {
-  mask-image: linear-gradient(to bottom, transparent, #000 22%, #000 78%, transparent);
-}
-
-@keyframes bn-chevron-stream {
-  0% {
-    top: 0;
-    transform: translateY(-100%);
-  }
-
-  100% {
-    top: 100%;
-    transform: translateY(0);
-  }
-}
-
-.bn-chevron-stream {
-  animation: bn-chevron-stream 1.8s linear infinite;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bn-chevron-stream {
-    animation: none;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-
-  .bn-chevron-stream + .bn-chevron-stream {
-    display: none;
-  }
-}
-</style>

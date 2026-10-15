@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import type { MobileNumber } from '../../composables/useMobileShop'
-
 const HERO_IMAGE = 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1600&q=80'
 
 const route = useRoute()
@@ -23,14 +21,59 @@ const money = new Intl.NumberFormat('en-GB', {
   maximumFractionDigits: 0
 })
 
-const item = ref<MobileNumber | null>(null)
-const loading = ref(true)
-const missing = ref(false)
-const lookupError = ref('')
-
 const digits = computed(() => {
   const raw = String(route.params.number || '')
   return /^\d{10,11}$/.test(raw) ? raw : ''
+})
+
+const { data: item, error: lookupFailure, status } = await useAsyncData(
+  () => `mobile-number-${String(route.params.number || '')}`,
+  () => {
+    if (!digits.value) return Promise.resolve(null)
+    return findNumber(digits.value)
+  },
+  { watch: [digits] }
+)
+
+function lookupMessage(err: unknown) {
+  const data = (err as { data?: { error?: string }, statusMessage?: string, message?: string })
+  if (typeof data?.data?.error === 'string' && data.data.error) return data.data.error
+  if (typeof data?.statusMessage === 'string' && data.statusMessage) return data.statusMessage
+  if (typeof data?.message === 'string' && data.message) return data.message
+  return 'We could not load this number. Please try again.'
+}
+
+function notFoundError() {
+  return createError({
+    statusCode: 404,
+    statusMessage: `Page not found: ${route.path}`,
+    fatal: true
+  })
+}
+
+if (lookupFailure.value) {
+  throw createError({
+    statusCode: lookupFailure.value.statusCode || 500,
+    statusMessage: lookupMessage(lookupFailure.value),
+    fatal: true
+  })
+}
+
+if (status.value !== 'pending' && !item.value) {
+  throw notFoundError()
+}
+
+watch(status, (value) => {
+  if (import.meta.server || value === 'pending' || value === 'idle') return
+  if (lookupFailure.value) {
+    showError(createError({
+      statusCode: lookupFailure.value.statusCode || 500,
+      statusMessage: lookupMessage(lookupFailure.value),
+      fatal: true
+    }))
+    return
+  }
+  if (!item.value) showError(notFoundError())
 })
 
 const formattedNumber = computed(() => item.value ? formatNumber(item.value.number) : '')
@@ -167,48 +210,23 @@ const questions = computed(() => [
   }
 ])
 
-function lookupMessage(err: unknown) {
-  const data = (err as { data?: { error?: string } })?.data?.error
-  if (typeof data === 'string' && data) return data
-  return 'We could not load this number. Please try again.'
-}
-
-async function load() {
-  loading.value = true
-  missing.value = false
-  lookupError.value = ''
-  item.value = null
-  if (!digits.value) {
-    missing.value = true
-    loading.value = false
-    return
-  }
-  try {
-    const [found] = await Promise.all([
-      findNumber(digits.value),
-      ensureSession()
-    ])
-    item.value = found
-    missing.value = !found
-  } catch (err) {
-    item.value = null
-    missing.value = false
-    lookupError.value = lookupMessage(err)
-  } finally {
-    loading.value = false
-  }
-}
-
 onMounted(() => {
-  watch(digits, () => {
-    load()
-  }, { immediate: true })
+  ensureSession()
 })
 
+const { shopLink } = useMobileSearchQuery()
+
 const crumbs = computed(() => [
-  { label: 'Mobile numbers', to: '/mobile-numbers' },
+  { label: 'Mobile numbers', to: shopLink.value },
   { label: formattedNumber.value || 'Number' }
 ])
+
+const searchLinks = computed(() => [{
+  label: 'Search numbers',
+  to: shopLink.value,
+  size: 'lg' as const,
+  trailingIcon: 'i-lucide-arrow-right'
+}])
 </script>
 
 <template>
@@ -220,15 +238,15 @@ const crumbs = computed(() => [
       />
 
       <UAlert
-        v-if="lookupError || error"
+        v-if="error"
         class="mb-6"
         color="error"
         variant="subtle"
-        :title="lookupError || error"
+        :title="error"
       />
 
       <div
-        v-if="loading"
+        v-if="status === 'pending' && !item"
         class="grid items-center gap-8 lg:grid-cols-2"
         aria-busy="true"
       >
@@ -240,30 +258,6 @@ const crumbs = computed(() => [
           <USkeleton class="h-5 w-56" />
           <USkeleton class="h-11 w-40 rounded-md" />
         </div>
-      </div>
-
-      <div
-        v-else-if="missing"
-        class="mx-auto max-w-xl py-8 text-center"
-      >
-        <UIcon
-          name="i-lucide-smartphone"
-          class="mx-auto size-10 text-muted"
-        />
-        <h1 class="mt-4 text-3xl font-semibold text-highlighted">
-          This number isn't available
-        </h1>
-        <p class="mt-3 text-muted">
-          It may already have been sold, or the link may be out of date. Search again and pick a number that is still for sale.
-        </p>
-        <UButton
-          to="/mobile-numbers"
-          class="mt-6"
-          size="lg"
-          trailing-icon="i-lucide-arrow-right"
-        >
-          Search numbers
-        </UButton>
       </div>
 
       <div
@@ -320,7 +314,7 @@ const crumbs = computed(() => [
               Remove
             </UButton>
             <UButton
-              to="/mobile-numbers"
+              :to="shopLink"
               color="neutral"
               variant="outline"
               size="lg"
@@ -332,7 +326,7 @@ const crumbs = computed(() => [
       </div>
     </UContainer>
 
-    <template v-if="item && !loading">
+    <template v-if="item">
       <UPageSection
         headline="Included"
         title="What you get"
@@ -425,12 +419,7 @@ const crumbs = computed(() => [
         title="Want a different number?"
         description="Go back to the shop and search by the digits, the prefix, or the ending you have in mind."
         variant="subtle"
-        :links="[{
-          label: 'Search numbers',
-          to: '/mobile-numbers',
-          size: 'lg',
-          trailingIcon: 'i-lucide-arrow-right'
-        }]"
+        :links="searchLinks"
       />
     </template>
   </div>

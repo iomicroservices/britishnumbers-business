@@ -160,10 +160,12 @@ export function useMobileShop() {
 
   async function findNumber(number: string) {
     const digits = number.replace(/\D/g, '')
+    const path = '/api/mobile'
+    const request = import.meta.server ? `${useRequestURL().origin}${path}` : path
     const response = await $fetch<{
       data?: MobileNumber[]
       error?: string
-    }>('/api/mobile', {
+    }>(request, {
       query: {
         q: digits,
         match: 'number',

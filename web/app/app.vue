@@ -21,11 +21,12 @@ useSeoMeta({
   ogDescription: description
 })
 
-const nav = [
+const { shopLink } = useMobileSearchQuery()
+const nav = computed(() => [
   { label: 'Home', to: '/' },
   { label: 'Telephone', to: '/telephone-numbers' },
-  { label: 'Mobile', to: '/mobile-numbers' }
-]
+  { label: 'Mobile', to: shopLink.value }
+])
 
 const route = useRoute()
 const basketOpen = useState('mobile-basket-open', () => false)

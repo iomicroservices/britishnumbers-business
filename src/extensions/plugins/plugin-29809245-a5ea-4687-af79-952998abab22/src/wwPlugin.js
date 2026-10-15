@@ -83,6 +83,10 @@ export default {
         return record;
     },
     async deleteRecord({ collectionId, recordId }, wwUtils) {
+        if (!recordId) {
+            throw new Error(`Missing Airtable recordId for collection ${collectionId}`);
+        }
+
         let response = null;
         wwUtils?.log('info', `Deleting record ${recordId} for _wwCollection(${collectionId})`, { type: 'request' });
         /* wwFront:start */

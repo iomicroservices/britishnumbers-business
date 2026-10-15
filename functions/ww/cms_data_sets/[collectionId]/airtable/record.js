@@ -1,4 +1,10 @@
-import { createRecord, errorResponse, json, resolveTableOrThrow } from '../../../../_lib/airtable.js';
+import {
+    assertCreatePayloadAllowed,
+    createRecord,
+    errorResponse,
+    json,
+    resolveTableOrThrow,
+} from '../../../../_lib/airtable.js';
 
 export async function onRequestPost(context) {
     try {
@@ -6,8 +12,10 @@ export async function onRequestPost(context) {
         const tableId = resolveTableOrThrow(collectionId);
 
         const body = await context.request.json();
-        const record = await createRecord(context.env, tableId, body.data || {});
+        const data = body.data || {};
+        assertCreatePayloadAllowed(collectionId, data);
 
+        const record = await createRecord(context.env, tableId, data);
         return json({ data: record });
     } catch (error) {
         return errorResponse(error);

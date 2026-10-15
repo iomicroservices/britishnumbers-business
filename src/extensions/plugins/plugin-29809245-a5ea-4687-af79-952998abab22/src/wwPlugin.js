@@ -1,3 +1,13 @@
+const SESSIONS_COLLECTION_ID = 'dd07e718-03fb-46e0-b759-042f6654659a';
+const SESSION_VAR_MOBILE = '28912e29-cc22-4f99-94f5-e24dad1659c3';
+const SESSION_VAR_LANDLINE = '25bbbb04-dd94-47eb-b380-9c6d9c48e717';
+
+function getExistingSessionId(data) {
+    const type = data?.type;
+    const variableId = type === 'landline' ? SESSION_VAR_LANDLINE : SESSION_VAR_MOBILE;
+    const value = wwLib.wwVariable.getValue(variableId);
+    return typeof value === 'string' && value.startsWith('rec') ? value : '';
+}
 
 export default {
     /*=============================================m_ÔÔ_m=============================================\
@@ -14,21 +24,38 @@ export default {
         });
 
         /* wwFront:start */
-        response = await axios.post(
-            `${window.location.origin}/ww/cms_data_sets/${collectionId}/airtable/record`,
-            { data }
-        );
+        if (collectionId === SESSIONS_COLLECTION_ID) {
+            response = await axios.post(`${window.location.origin}/ww/session/ensure`, {
+                sessionId: getExistingSessionId(data),
+                type: data?.type || 'mobile',
+                is_auth: !!data?.is_auth,
+            });
+        } else {
+            response = await axios.post(
+                `${window.location.origin}/ww/cms_data_sets/${collectionId}/airtable/record`,
+                { data }
+            );
+        }
         /* wwFront:end */
 
         const record = response.data.data;
         const collection = wwLib.$store.getters['data/getCollections'][collectionId];
         if (!collection) return null;
-        const collectionData = Array.isArray(collection.data) ? collection.data : [];
-        wwLib.$store.dispatch('data/setCollection', {
-            ...collection,
-            total: collection.total + 1,
-            data: [...collectionData, record],
-        });
+        const collectionData = Array.isArray(collection.data) ? [...collection.data] : [];
+        const existingIndex = collectionData.findIndex(item => item && item.id === record.id);
+        if (existingIndex === -1) {
+            wwLib.$store.dispatch('data/setCollection', {
+                ...collection,
+                total: (collection.total || 0) + 1,
+                data: [...collectionData, record],
+            });
+        } else {
+            collectionData.splice(existingIndex, 1, record);
+            wwLib.$store.dispatch('data/setCollection', {
+                ...collection,
+                data: collectionData,
+            });
+        }
 
         return record;
     },

@@ -1,3 +1,5 @@
+const TAMAR_AVAILABLE_URL = 'https://api.tamar.co.uk/list/available';
+
 function json(data, status = 200) {
     return new Response(JSON.stringify(data), {
         status,
@@ -8,36 +10,109 @@ function json(data, status = 200) {
     });
 }
 
-function getWebhookUrl(env) {
-    const url = env.MAKE_LANDLINE_WEBHOOK_URL;
-    if (!url) {
-        throw new Error('MAKE_LANDLINE_WEBHOOK_URL is not configured');
+function resolveProvider(env) {
+    const explicit = String(env.LANDLINE_PROVIDER || '')
+        .trim()
+        .toLowerCase();
+    if (explicit === 'tamar' || explicit === 'make') {
+        return explicit;
     }
-    return url;
+    // Default: Tamar when key is present; otherwise keep Make until removed
+    return env.TAMAR_API_KEY ? 'tamar' : 'make';
 }
 
-async function handleLandline(request, env) {
-    const webhook = getWebhookUrl(env);
-    const incoming = new URL(request.url);
-    const upstream = new URL(webhook);
+function basicAuthHeader(apiKey) {
+    // Basic auth: API key as username, empty password (or full user:pass if provided)
+    const credentials = apiKey.includes(':') ? apiKey : `${apiKey}:`;
+    return `Basic ${btoa(credentials)}`;
+}
 
-    for (const [key, value] of incoming.searchParams.entries()) {
-        upstream.searchParams.set(key, value);
+function transformTamarMap(data) {
+    // Tamar: { "01144371000": "600", ... } → [{ number, price }, ...]
+    if (Array.isArray(data)) {
+        return data;
     }
+    if (!data || typeof data !== 'object') {
+        return [];
+    }
+    return Object.entries(data).map(([number, price]) => ({
+        number,
+        price: Number(price),
+    }));
+}
 
-    // Also accept POST body with areaCode / grade (defensive; collection uses GET)
+async function readAreaCodeAndGrade(request) {
+    const incoming = new URL(request.url);
+    let areaCode = incoming.searchParams.get('areaCode') || '';
+    let grade = incoming.searchParams.get('grade') || '';
+
     if (request.method === 'POST') {
         try {
             const body = await request.json();
-            for (const key of ['areaCode', 'grade']) {
-                if (body?.[key] != null && body[key] !== '') {
-                    upstream.searchParams.set(key, String(body[key]));
-                }
+            if (body?.areaCode != null && body.areaCode !== '') {
+                areaCode = String(body.areaCode);
+            }
+            if (body?.grade != null && body.grade !== '') {
+                grade = String(body.grade);
             }
         } catch {
             // ignore invalid JSON
         }
     }
+
+    return {
+        areaCode: String(areaCode || '').trim(),
+        grade: String(grade || '').trim(),
+    };
+}
+
+async function handleTamar(areaCode, env) {
+    const apiKey = env.TAMAR_API_KEY;
+    if (!apiKey) {
+        throw new Error('TAMAR_API_KEY is not configured');
+    }
+    if (!areaCode) {
+        return json([]);
+    }
+
+    const upstream = `${TAMAR_AVAILABLE_URL}/${encodeURIComponent(areaCode)}`;
+    const response = await fetch(upstream, {
+        method: 'GET',
+        headers: {
+            Authorization: basicAuthHeader(apiKey),
+            Accept: 'application/json',
+        },
+    });
+
+    const text = await response.text();
+    let body = null;
+    try {
+        body = text ? JSON.parse(text) : null;
+    } catch {
+        body = null;
+    }
+
+    if (!response.ok) {
+        return json(
+            {
+                error: body?.error || body || text || `Tamar request failed (${response.status})`,
+            },
+            response.status
+        );
+    }
+
+    return json(transformTamarMap(body));
+}
+
+async function handleMake(areaCode, grade, env) {
+    const webhook = env.MAKE_LANDLINE_WEBHOOK_URL;
+    if (!webhook) {
+        throw new Error('MAKE_LANDLINE_WEBHOOK_URL is not configured');
+    }
+
+    const upstream = new URL(webhook);
+    if (areaCode) upstream.searchParams.set('areaCode', areaCode);
+    if (grade) upstream.searchParams.set('grade', grade);
 
     const response = await fetch(upstream.toString(), {
         method: 'GET',
@@ -59,7 +134,6 @@ async function handleLandline(request, env) {
         return json(body, response.status);
     }
 
-    // Make often returns plain text ("Accepted") — wrap non-JSON so axios always gets JSON
     if (!response.ok) {
         return json({ error: text || `Make landline request failed (${response.status})` }, response.status);
     }
@@ -75,6 +149,16 @@ async function handleLandline(request, env) {
             },
         });
     }
+}
+
+async function handleLandline(request, env) {
+    const { areaCode, grade } = await readAreaCodeAndGrade(request);
+    const provider = resolveProvider(env);
+
+    if (provider === 'tamar') {
+        return handleTamar(areaCode, env);
+    }
+    return handleMake(areaCode, grade, env);
 }
 
 export async function onRequestGet(context) {

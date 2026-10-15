@@ -11,8 +11,10 @@ In **Workers & Pages → your project → Settings → Environment variables** (
 | `AIRTABLE_TOKEN` | Secret | Airtable personal access token |
 | `SESSION_TTL_DAYS` | Plain text (optional) | Session lifetime in days (default `7`) |
 | `COMPANIES_HOUSE_API_KEY` | Secret | Companies House API key (username only; password empty) |
-| `MAKE_LANDLINE_WEBHOOK_URL` | Secret | Full Make.com webhook URL for landline search |
+| `MAKE_LANDLINE_WEBHOOK_URL` | Secret | Make.com landline webhook (fallback only) |
 | `MAKE_CHECKOUT_WEBHOOK_URL` | Secret | Full Make.com webhook URL for checkout / lead submit |
+| `TAMAR_API_KEY` | Secret | Tamar API key (Basic auth username; empty password) |
+| `LANDLINE_PROVIDER` | Plain text (optional) | `tamar` or `make`. Default: `tamar` if `TAMAR_API_KEY` is set, else `make` |
 
 Airtable token scopes needed:
 
@@ -52,11 +54,20 @@ Expired sessions are treated as invalid on ensure/GET; rows are not deleted auto
 
 Frontend collection `companiesHouse` calls same-origin `/api/companies-house` (no API key in the browser). The Function adds Basic auth and forwards to Companies House search.
 
-### Make.com
+### Landline (`/api/make/landline`)
 
-Webhook URLs stay in Cloudflare secrets (not in page JSON). Frontend calls:
+Frontend collection `apiLandline` still calls same-origin `/api/make/landline` (no provider secrets in the browser).
 
-- Collection `apiLandline` → `GET /api/make/landline` (forwards `areaCode`, `grade`)
+**Default provider: Tamar** when `TAMAR_API_KEY` is set:
+
+- `GET https://api.tamar.co.uk/list/available/{areaCode}` with Basic auth
+- Transforms `{ "01144371000": "600", ... }` → `[{ "number": "01144371000", "price": 600 }, ...]`
+- `grade` is ignored upstream (the app filters Bronze/Silver/Gold/Platinum by price client-side)
+
+**Fallback: Make** when `LANDLINE_PROVIDER=make`, or when no `TAMAR_API_KEY` is set — forwards `areaCode` / `grade` to `MAKE_LANDLINE_WEBHOOK_URL`. Keep this until Tamar is verified in production, then remove.
+
+### Make.com checkout
+
 - Workflow action `send to make` → `POST /api/make/checkout` (forwards JSON body)
 
 ## Smoke test after deploy
@@ -93,18 +104,22 @@ curl.exe -s "$BASE/api/companies-house?q=british+numbers"
 
 Expect a JSON payload with an `items` array.
 
-### Make.com smoke tests
+### Landline smoke test (Tamar)
 
 ```bash
-# Landline search (use a real areaCode/grade your scenario expects)
-curl.exe -s "$BASE/api/make/landline?areaCode=020&grade=gold"
+curl.exe -s "$BASE/api/make/landline?areaCode=0114"
+```
 
-# Checkout / lead submit
+Expect a JSON **array** of `{ "number": "...", "price": <number> }`.  
+To force Make fallback temporarily: set `LANDLINE_PROVIDER=make` and redeploy.
+
+### Checkout smoke test (Make)
+
+```bash
 curl.exe -s -X POST "$BASE/api/make/checkout" \
   -H "content-type: application/json" \
   -d "{\"email\":\"test@example.com\",\"type\":\"mobile\",\"source\":\"smoke-test\"}"
 ```
-
 
 Expect JSON (or `{ ok: true, message: "Accepted" }` if Make returns plain text). Missing secrets return `500` with a clear error.
 
@@ -115,5 +130,6 @@ Expect JSON (or `{ ok: true, message: "Accepted" }` if Make returns plain text).
 3. Add to basket still works
 4. Network tab: no open `/fetch` dumping full sessions/basket tables
 5. Company search returns Companies House results (no WeWeb/`data.weweb.io` calls)
-6. Telephone Numbers landline search hits `/api/make/landline` (not `hook.eu1.make.com`)
-7. Checkout / send-to-make on mobile, telephone, special hits `/api/make/checkout`
+6. Telephone Numbers landline search hits `/api/make/landline` and returns priced numbers (Tamar)
+7. Grade chips still filter by price client-side
+8. Checkout / send-to-make on mobile, telephone, special hits `/api/make/checkout`

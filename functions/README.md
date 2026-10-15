@@ -41,8 +41,8 @@ Expired sessions are treated as invalid on ensure/GET; rows are not deleted auto
 | Method | Path |
 |--------|------|
 | `GET` / `POST` | `/api/companies-house?q=...` |
-| `GET` / `POST` | `/api/make/landline?areaCode=...&grade=...` |
-| `POST` | `/api/make/checkout` |
+| `GET` / `POST` | `/api/landline?areaCode=...&grade=...` |
+| `POST` | `/api/checkout` |
 | `POST` | `/ww/session/ensure` |
 | `POST` | `/ww/cms_data_sets/:collectionId/fetch` |
 | `POST` | `/ww/cms_data_sets/:collectionId/airtable/record` |
@@ -54,9 +54,9 @@ Expired sessions are treated as invalid on ensure/GET; rows are not deleted auto
 
 Frontend collection `companiesHouse` calls same-origin `/api/companies-house` (no API key in the browser). The Function adds Basic auth and forwards to Companies House search.
 
-### Landline (`/api/make/landline`)
+### Landline (`/api/landline`)
 
-Frontend collection `apiLandline` still calls same-origin `/api/make/landline` (no provider secrets in the browser).
+Frontend collection `apiLandline` calls same-origin `/api/landline` (no provider secrets in the browser).
 
 **Default provider: Tamar** when `TAMAR_API_KEY` is set:
 
@@ -68,7 +68,7 @@ Frontend collection `apiLandline` still calls same-origin `/api/make/landline` (
 
 ### Make.com checkout
 
-- Workflow action `send to make` → `POST /api/make/checkout` (forwards JSON body)
+- Workflow action `send to make` → `POST /api/checkout` (forwards JSON body)
 
 ## Smoke test after deploy
 
@@ -107,7 +107,7 @@ Expect a JSON payload with an `items` array.
 ### Landline smoke test (Tamar)
 
 ```bash
-curl.exe -s "$BASE/api/make/landline?areaCode=0114"
+curl.exe -s "$BASE/api/landline?areaCode=0114"
 ```
 
 Expect a JSON **array** of `{ "number": "...", "price": <number> }`.  
@@ -116,7 +116,7 @@ To force Make fallback temporarily: set `LANDLINE_PROVIDER=make` and redeploy.
 ### Checkout smoke test (Make)
 
 ```bash
-curl.exe -s -X POST "$BASE/api/make/checkout" \
+curl.exe -s -X POST "$BASE/api/checkout" \
   -H "content-type: application/json" \
   -d "{\"email\":\"test@example.com\",\"type\":\"mobile\",\"source\":\"smoke-test\"}"
 ```
@@ -130,6 +130,6 @@ Expect JSON (or `{ ok: true, message: "Accepted" }` if Make returns plain text).
 3. Add to basket still works
 4. Network tab: no open `/fetch` dumping full sessions/basket tables
 5. Company search returns Companies House results (no WeWeb/`data.weweb.io` calls)
-6. Telephone Numbers landline search hits `/api/make/landline` and returns priced numbers (Tamar)
+6. Telephone Numbers landline search hits `/api/landline` and returns priced numbers (Tamar)
 7. Grade chips still filter by price client-side
-8. Checkout / send-to-make on mobile, telephone, special hits `/api/make/checkout`
+8. Checkout / send-to-make on mobile, telephone, special hits `/api/checkout`

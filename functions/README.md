@@ -1,6 +1,6 @@
-# Airtable proxy (Cloudflare Pages Functions)
+# Cloudflare Pages Functions
 
-These Functions recreate WeWeb’s `/ww/cms_data_sets/...` Airtable endpoints and add session ensure, so the exported frontend can read/write Airtable on Cloudflare Pages without WeWeb microservices.
+Proxies that replace WeWeb microservices so the exported frontend can run on Cloudflare Pages.
 
 ## Required env (Cloudflare Pages)
 
@@ -10,14 +10,15 @@ In **Workers & Pages → your project → Settings → Environment variables** (
 |------|------|---------|
 | `AIRTABLE_TOKEN` | Secret | Airtable personal access token |
 | `SESSION_TTL_DAYS` | Plain text (optional) | Session lifetime in days (default `7`) |
+| `COMPANIES_HOUSE_API_KEY` | Secret | Companies House API key (username only; password empty) |
 
-Token scopes needed:
+Airtable token scopes needed:
 
 - `data.records:read`
 - `data.records:write`
 - `schema.bases:read` (optional)
 
-Do **not** commit the token. Base/table IDs live in `functions/_lib/airtable.js`.
+Do **not** commit secrets. Airtable base/table IDs live in `functions/_lib/airtable.js`.
 
 Redeploy after changing secrets/env.
 
@@ -35,12 +36,17 @@ Expired sessions are treated as invalid on ensure/GET; rows are not deleted auto
 
 | Method | Path |
 |--------|------|
+| `GET` / `POST` | `/api/companies-house?q=...` |
 | `POST` | `/ww/session/ensure` |
 | `POST` | `/ww/cms_data_sets/:collectionId/fetch` |
 | `POST` | `/ww/cms_data_sets/:collectionId/airtable/record` |
 | `GET` | `/ww/cms_data_sets/:collectionId/airtable/record/:recordId` |
 | `PATCH` | `/ww/cms_data_sets/:collectionId/airtable/record/:recordId` |
 | `DELETE` | `/ww/cms_data_sets/:collectionId/airtable/record/:recordId` |
+
+### Companies House
+
+Frontend collection `companiesHouse` calls same-origin `/api/companies-house` (no API key in the browser). The Function adds Basic auth and forwards to Companies House search.
 
 ## Smoke test after deploy
 
@@ -68,9 +74,18 @@ curl -s -X POST \
   -H "content-type: application/json" -d "{}"
 ```
 
+### Companies House smoke test
+
+```bash
+curl -s "$BASE/api/companies-house?q=british+numbers"
+```
+
+Expect a JSON payload with an `items` array.
+
 ## Manual UI checks
 
-1. Fresh browser on Mobile Numbers: one session created; reload keeps the same id  
-2. Delete that Airtable session row (or wait past TTL): reload creates a new id  
-3. Add to basket still works  
+1. Fresh browser on Mobile Numbers: one session created; reload keeps the same id
+2. Delete that Airtable session row (or wait past TTL): reload creates a new id
+3. Add to basket still works
 4. Network tab: no open `/fetch` dumping full sessions/basket tables
+5. Company search returns Companies House results (no WeWeb/`data.weweb.io` calls)

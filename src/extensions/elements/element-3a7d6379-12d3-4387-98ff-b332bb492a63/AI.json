@@ -22,7 +22,7 @@
             "name": "url",
             "description": "Image source URL. Urls from the project images should be formatted as `designs/<projectId>/sections/<file_name>?_wwcv=<number>`. Respect the exact url returned by the project images search, even if it does not contain an http prefix.",
             "type": "string",
-            "defaultValue": "https://cdn.weweb.app/public/images/no_image_selected.png"
+            "defaultValue": "/images/new-logo-BN_-_trans_-_3.png"
         },
         {
             "name": "objectFit",

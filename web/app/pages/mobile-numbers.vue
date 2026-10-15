@@ -1,5 +1,5 @@
-<script setup lang="ts">
-import type { CheckoutDetails, CompanyHit, MobileMatch } from '../composables/useMobileShop'
+﻿<script setup lang="ts">
+import { MOBILE_PAGE_SIZE, type MobileMatch } from '../composables/useMobileShop'
 
 useSeoMeta({
   title: 'Mobile numbers · British Numbers',
@@ -11,40 +11,17 @@ const {
   ready,
   searching,
   results,
-  basket,
+  page,
+  resultTotal,
   basketBusy,
-  total,
-  companies,
-  lookingUp,
-  checkingOut,
   inBasket,
   ensureSession,
   search,
-  addToBasket,
-  removeFromBasket,
-  lookupCompany,
-  saveCompany,
-  checkout
+  addToBasket
 } = useMobileShop()
-const query = ref('')
-const match = ref<MobileMatch>('number')
-const companyQuery = ref('')
-const showCheckout = ref(false)
-
-const form = reactive<CheckoutDetails>({
-  firstName: '',
-  lastName: '',
-  email: '',
-  contactNumber: '',
-  address: '',
-  city: '',
-  postCode: '',
-  businessType: 'Sole Trader',
-  businessName: '',
-  businessReg: '',
-  news: false,
-  conditions: false
-})
+const route = useRoute()
+const query = ref('07')
+const match = ref<MobileMatch>('prefix')
 
 const matchOptions = [
   { label: 'First part', value: 'prefix' },
@@ -52,41 +29,35 @@ const matchOptions = [
   { label: 'Last part', value: 'last_six' }
 ]
 
-const businessTypes = ['Sole Trader', 'Company', 'Partnership', 'Charity', 'Government']
-
 const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' })
 
 function formatPrice(value: number) {
   return money.format(Number(value) || 0)
 }
 
-onMounted(() => {
-  ensureSession()
-})
+const pageCount = computed(() => Math.max(1, Math.ceil(resultTotal.value / MOBILE_PAGE_SIZE)))
+const foundLabel = computed(() => `${resultTotal.value} number${resultTotal.value === 1 ? '' : 's'} found`)
+
+async function showNumbers() {
+  await Promise.all([
+    ensureSession(),
+    search(query.value || '07', match.value)
+  ])
+}
+
+if (import.meta.client) {
+  watch(() => route.path, (path) => {
+    if (path === '/mobile-numbers') showNumbers()
+  }, { immediate: true })
+}
 
 async function onSearch() {
-  await search(query.value, match.value)
+  await search(query.value, match.value, 1)
 }
 
-async function onLookup() {
-  if (!companyQuery.value.trim()) return
-  await lookupCompany(companyQuery.value.trim())
-}
-
-async function chooseCompany(hit: CompanyHit) {
-  form.businessName = hit.title
-  form.businessReg = hit.company_number
-  if (hit.address_snippet) form.address = hit.address_snippet
-  companies.value = []
-  try {
-    await saveCompany(hit)
-  } catch {
-    // The lead still stores the company fields if the side record fails.
-  }
-}
-
-async function onCheckout() {
-  await checkout(form)
+async function goToPage(nextPage: number) {
+  if (nextPage === page.value || nextPage < 1 || nextPage > pageCount.value) return
+  await search(query.value, match.value, nextPage)
 }
 </script>
 
@@ -144,27 +115,26 @@ async function onCheckout() {
       </form>
     </UCard>
 
-    <div class="mt-8 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
-      <section>
-        <div class="mb-3 flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-highlighted">
-            Numbers
-          </h2>
-          <p class="text-sm text-muted">
-            {{ results.length }} shown
-          </p>
-        </div>
+    <section class="mt-8">
+      <div class="mb-3 flex items-center justify-between">
+        <h2 class="text-lg font-semibold text-highlighted">
+          Numbers
+        </h2>
+        <p class="text-sm text-muted">
+          {{ foundLabel }}
+        </p>
+      </div>
 
-        <UCard v-if="!results.length">
-          <p class="text-sm text-muted">
-            Search to see available numbers. Purchase does not guarantee availability. We don't recommend sharing or marketing the number until completion of delivery.
-          </p>
-        </UCard>
+      <UCard v-if="!results.length">
+        <p class="text-sm text-muted">
+          Search to see available numbers. Purchase does not guarantee availability. We don't recommend sharing or marketing the number until completion of delivery.
+        </p>
+      </UCard>
 
-        <ul
-          v-else
-          class="flex flex-col gap-2"
-        >
+      <ul
+        v-else
+        class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+      >
           <li
             v-for="item in results"
             :key="item.number"
@@ -191,237 +161,20 @@ async function onCheckout() {
             </UCard>
           </li>
         </ul>
-      </section>
 
-      <aside class="lg:sticky lg:top-4">
-        <UCard>
-          <template #header>
-            <div class="flex items-center justify-between">
-              <h2 class="font-semibold text-highlighted">
-                Basket
-              </h2>
-              <span class="text-sm text-muted">{{ basket.length }}</span>
-            </div>
-          </template>
-
-          <p
-            v-if="!basket.length"
-            class="text-sm text-muted"
-          >
-            You're just a few clicks away from your new number.
-          </p>
-          <ul
-            v-else
-            class="flex flex-col gap-3"
-          >
-            <li
-              v-for="item in basket"
-              :key="item.id"
-              class="flex items-center justify-between gap-3"
-            >
-              <div>
-                <p class="font-medium text-highlighted">
-                  {{ item.number }}
-                </p>
-                <p class="text-sm text-muted">
-                  {{ formatPrice(item.price) }}
-                </p>
-              </div>
-              <UButton
-                color="neutral"
-                variant="ghost"
-                size="sm"
-                :disabled="basketBusy"
-                @click="removeFromBasket(item.id)"
-              >
-                Remove
-              </UButton>
-            </li>
-          </ul>
-
-          <template #footer>
-            <div class="flex items-center justify-between">
-              <span class="text-sm text-muted">Total</span>
-              <span class="text-lg font-semibold text-highlighted">{{ formatPrice(total) }}</span>
-            </div>
-            <UButton
-              class="mt-4 w-full"
-              size="lg"
-              :disabled="!basket.length"
-              @click="showCheckout = true"
-            >
-              Proceed to checkout
-            </UButton>
-          </template>
-        </UCard>
-      </aside>
-    </div>
-
-    <USlideover
-      v-model:open="showCheckout"
-      title="Review order and connect"
-      description="Tell us where to deliver the number."
-    >
-      <template #body>
-        <form
-          class="flex flex-col gap-4"
-          @submit.prevent="onCheckout"
-        >
-          <div class="grid gap-4 sm:grid-cols-2">
-            <UFormField
-              label="First name"
-              required
-            >
-              <UInput
-                v-model="form.firstName"
-                required
-                class="w-full"
-              />
-            </UFormField>
-            <UFormField
-              label="Last name"
-              required
-            >
-              <UInput
-                v-model="form.lastName"
-                required
-                class="w-full"
-              />
-            </UFormField>
-          </div>
-          <UFormField
-            label="Email"
-            required
-          >
-            <UInput
-              v-model="form.email"
-              type="email"
-              required
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField
-            label="Contact number"
-            required
-          >
-            <UInput
-              v-model="form.contactNumber"
-              type="tel"
-              required
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField
-            label="Address"
-            required
-          >
-            <UInput
-              v-model="form.address"
-              required
-              class="w-full"
-            />
-          </UFormField>
-          <div class="grid gap-4 sm:grid-cols-2">
-            <UFormField
-              label="City"
-              required
-            >
-              <UInput
-                v-model="form.city"
-                required
-                class="w-full"
-              />
-            </UFormField>
-            <UFormField
-              label="Post code"
-              required
-            >
-              <UInput
-                v-model="form.postCode"
-                required
-                class="w-full"
-              />
-            </UFormField>
-          </div>
-          <UFormField label="Business type">
-            <USelect
-              v-model="form.businessType"
-              :items="businessTypes"
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField label="Search by company name or number">
-            <div class="flex gap-2">
-              <UInput
-                v-model="companyQuery"
-                placeholder="Lookup a registered business"
-                class="w-full"
-                @keydown.enter.prevent="onLookup"
-              />
-              <UButton
-                type="button"
-                color="neutral"
-                variant="outline"
-                :loading="lookingUp"
-                @click="onLookup"
-              >
-                Lookup
-              </UButton>
-            </div>
-          </UFormField>
-          <ul
-            v-if="companies.length"
-            class="max-h-40 overflow-auto rounded-md border border-default"
-          >
-            <li
-              v-for="hit in companies"
-              :key="hit.company_number"
-            >
-              <button
-                type="button"
-                class="w-full px-3 py-2 text-left hover:bg-elevated"
-                @click="chooseCompany(hit)"
-              >
-                <span class="block text-sm font-medium text-highlighted">{{ hit.title }}</span>
-                <span class="block text-xs text-muted">{{ hit.company_number }} · {{ hit.address_snippet }}</span>
-              </button>
-            </li>
-          </ul>
-          <UFormField label="Business name">
-            <UInput
-              v-model="form.businessName"
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField label="Company reg number">
-            <UInput
-              v-model="form.businessReg"
-              class="w-full"
-            />
-          </UFormField>
-          <UCheckbox
-            v-model="form.news"
-            label="Contact me about new offers"
-          />
-          <UCheckbox
-            v-model="form.conditions"
-            required
-            label="Accept Terms & Conditions"
-          />
-          <p class="text-sm text-muted">
-            Basket total {{ formatPrice(total) }}
-          </p>
-          <UButton
-            type="submit"
-            size="lg"
-            block
-            :loading="checkingOut"
-            :disabled="!form.conditions || !basket.length"
-          >
-            Pay now
-          </UButton>
-        </form>
-      </template>
-    </USlideover>
+      <div
+        v-if="resultTotal > 0"
+        class="mt-6 flex justify-center"
+      >
+        <UPagination
+          :page="page"
+          :total="resultTotal"
+          :items-per-page="MOBILE_PAGE_SIZE"
+          :disabled="searching"
+          show-controls
+          @update:page="goToPage"
+        />
+      </div>
+    </section>
   </UContainer>
 </template>

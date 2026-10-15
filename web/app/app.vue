@@ -27,6 +27,17 @@ const nav = [
   { label: 'Mobile', to: '/mobile-numbers' },
   { label: 'Special numbers', to: '/special-numbers' }
 ]
+
+const route = useRoute()
+const basketOpen = useState('mobile-basket-open', () => false)
+const basketStep = useState<'items' | 'details'>('mobile-basket-step', () => 'items')
+const { basket } = useMobileShop()
+const onMobilePage = computed(() => route.path === '/mobile-numbers')
+
+function openBasket() {
+  basketStep.value = 'items'
+  basketOpen.value = true
+}
 </script>
 
 <template>
@@ -49,9 +60,23 @@ const nav = [
       <UNavigationMenu :items="nav" />
 
       <template #right>
+        <UButton
+          v-if="onMobilePage"
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-shopping-bag"
+          @click="openBasket"
+        >
+          Basket
+          <span class="ms-1 text-xs text-muted">{{ basket.length }}</span>
+        </UButton>
         <UColorModeButton />
       </template>
     </UHeader>
+
+    <ClientOnly>
+      <MobileBasketDrawer v-if="onMobilePage" />
+    </ClientOnly>
 
     <UMain>
       <NuxtPage />

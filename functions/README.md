@@ -65,12 +65,14 @@ Frontend collection `apiLandline` calls same-origin `/api/landline` (no Tamar se
 
 ### Mobile numbers (`/api/mobile`)
 
-Searches the Supabase `mobile_numbers` table. Available rows only, cheapest first, 100 max.
+Searches the Supabase `mobile_numbers` table. Available rows only, cheapest first.
 
 - `match=prefix` — first part of the number
 - `match=number` — anywhere in the number
 - `match=last_six` — last part of the number
 - `q` is digits only; at least 2 are required
+- `page` starts at 1. Each page is 100 rows, matching the WeWeb collection limit
+- `total` is the Supabase `content-range` count (`0-99/1234`)
 
 ### Make.com checkout
 

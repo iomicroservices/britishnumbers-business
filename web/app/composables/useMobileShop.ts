@@ -34,6 +34,8 @@ export interface CheckoutDetails {
   conditions: boolean
 }
 
+export const MOBILE_PAGE_SIZE = 100
+
 const SESSION_KEY = 'bn-mobile-session'
 const BASKET = 'f307c3b2-c35c-4fda-8eeb-8519409853ea'
 const LEADS = '8dc4beaa-819b-48b0-95ed-6a6d92e9156b'
@@ -54,6 +56,8 @@ export function useMobileShop() {
   const sessionId = useState<string>('mobile-session', () => '')
   const basket = useState<BasketItem[]>('mobile-basket', () => [])
   const results = useState<MobileNumber[]>('mobile-results', () => [])
+  const page = useState('mobile-page', () => 1)
+  const resultTotal = useState('mobile-total', () => 0)
   const companies = useState<CompanyHit[]>('mobile-companies', () => [])
   const ready = useState('mobile-ready', () => false)
   const searching = ref(false)
@@ -105,16 +109,31 @@ export function useMobileShop() {
     }))
   }
 
-  async function search(query: string, match: MobileMatch) {
+  async function search(query: string, match: MobileMatch, nextPage = 1) {
     searching.value = true
     error.value = ''
     try {
-      const response = await $fetch<{ data?: MobileNumber[], error?: string }>('/api/mobile', {
-        query: { q: query, match }
+      const response = await $fetch<{
+        data?: MobileNumber[]
+        page?: number
+        total?: number
+        error?: string
+      }>('/api/mobile', {
+        query: {
+          q: query,
+          match,
+          page: nextPage,
+          pageSize: MOBILE_PAGE_SIZE
+        }
       })
-      results.value = response.data || []
+      const rows = response.data || []
+      results.value = rows
+      page.value = response.page || nextPage
+      resultTotal.value = response.total ?? rows.length
     } catch (err) {
       results.value = []
+      page.value = nextPage
+      resultTotal.value = 0
       error.value = errorMessage(err)
     } finally {
       searching.value = false
@@ -258,6 +277,8 @@ export function useMobileShop() {
     sessionId,
     basket,
     results,
+    page,
+    resultTotal,
     companies,
     ready,
     searching,

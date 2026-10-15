@@ -10,15 +10,12 @@ function json(data, status = 200) {
     });
 }
 
-function resolveProvider(env) {
-    const explicit = String(env.LANDLINE_PROVIDER || '')
-        .trim()
-        .toLowerCase();
-    if (explicit === 'tamar' || explicit === 'make') {
-        return explicit;
+function getApiKey(env) {
+    const key = env.TAMAR_API_KEY;
+    if (!key) {
+        throw new Error('TAMAR_API_KEY is not configured');
     }
-    // Default: Tamar when key is present; otherwise keep Make until removed
-    return env.TAMAR_API_KEY ? 'tamar' : 'make';
+    return key;
 }
 
 function basicAuthHeader(apiKey) {
@@ -41,10 +38,9 @@ function transformTamarMap(data) {
     }));
 }
 
-async function readAreaCodeAndGrade(request) {
+async function readAreaCode(request) {
     const incoming = new URL(request.url);
     let areaCode = incoming.searchParams.get('areaCode') || '';
-    let grade = incoming.searchParams.get('grade') || '';
 
     if (request.method === 'POST') {
         try {
@@ -52,25 +48,18 @@ async function readAreaCodeAndGrade(request) {
             if (body?.areaCode != null && body.areaCode !== '') {
                 areaCode = String(body.areaCode);
             }
-            if (body?.grade != null && body.grade !== '') {
-                grade = String(body.grade);
-            }
         } catch {
             // ignore invalid JSON
         }
     }
 
-    return {
-        areaCode: String(areaCode || '').trim(),
-        grade: String(grade || '').trim(),
-    };
+    return String(areaCode || '').trim();
 }
 
-async function handleTamar(areaCode, env) {
-    const apiKey = env.TAMAR_API_KEY;
-    if (!apiKey) {
-        throw new Error('TAMAR_API_KEY is not configured');
-    }
+async function handleLandline(request, env) {
+    const apiKey = getApiKey(env);
+    const areaCode = await readAreaCode(request);
+
     if (!areaCode) {
         return json([]);
     }
@@ -102,63 +91,6 @@ async function handleTamar(areaCode, env) {
     }
 
     return json(transformTamarMap(body));
-}
-
-async function handleMake(areaCode, grade, env) {
-    const webhook = env.MAKE_LANDLINE_WEBHOOK_URL;
-    if (!webhook) {
-        throw new Error('MAKE_LANDLINE_WEBHOOK_URL is not configured');
-    }
-
-    const upstream = new URL(webhook);
-    if (areaCode) upstream.searchParams.set('areaCode', areaCode);
-    if (grade) upstream.searchParams.set('grade', grade);
-
-    const response = await fetch(upstream.toString(), {
-        method: 'GET',
-        headers: {
-            Accept: 'application/json',
-        },
-    });
-
-    const text = await response.text();
-    const contentType = response.headers.get('content-type') || '';
-
-    if (contentType.includes('application/json')) {
-        let body = null;
-        try {
-            body = text ? JSON.parse(text) : null;
-        } catch {
-            body = { error: text || 'Invalid upstream response' };
-        }
-        return json(body, response.status);
-    }
-
-    if (!response.ok) {
-        return json({ error: text || `Make landline request failed (${response.status})` }, response.status);
-    }
-
-    try {
-        return json(text ? JSON.parse(text) : null, response.status);
-    } catch {
-        return new Response(text, {
-            status: response.status,
-            headers: {
-                'content-type': contentType || 'text/plain; charset=utf-8',
-                'cache-control': 'no-store',
-            },
-        });
-    }
-}
-
-async function handleLandline(request, env) {
-    const { areaCode, grade } = await readAreaCodeAndGrade(request);
-    const provider = resolveProvider(env);
-
-    if (provider === 'tamar') {
-        return handleTamar(areaCode, env);
-    }
-    return handleMake(areaCode, grade, env);
 }
 
 export async function onRequestGet(context) {

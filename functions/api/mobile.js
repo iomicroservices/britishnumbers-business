@@ -1,3 +1,5 @@
+const MEMORABLE_URL = 'https://api.britishnumbers.com/rest/v2/mobile/memorable';
+
 const MATCH_COLUMNS = {
     number: 'number',
     prefix: 'prefix',
@@ -12,6 +14,14 @@ function json(data, status = 200) {
             'cache-control': 'no-store',
         },
     });
+}
+
+function getBritishNumbersKey(env) {
+    const key = env.BRITISH_NUMBERS_API_KEY;
+    if (!key) {
+        throw new Error('BRITISH_NUMBERS_API_KEY is not configured');
+    }
+    return key;
 }
 
 function getSupabase(env) {
@@ -57,26 +67,72 @@ async function readQuery(request) {
     }
 
     return {
-        digits: String(q || '').replace(/\D/g, ''),
+        search: String(q || '').replace(/[^A-Za-z0-9,]/g, ''),
         match: MATCH_COLUMNS[match] ? match : 'number',
         page: readPositiveInt(page, 1),
         pageSize: Math.min(readPositiveInt(pageSize, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE),
     };
 }
 
-async function handleSearch(request, env) {
-    const { digits, match, page, pageSize } = await readQuery(request);
-    if (digits.length < 2) {
-        return json({ data: [], page, pageSize, total: 0, error: 'Enter at least 2 digits' }, 400);
+function mapRows(body) {
+    const rows = Array.isArray(body) ? body : [];
+    return rows.map(row => ({
+        number: String(row.number ?? ''),
+        price: Number(row.price ?? 0),
+        prefix: row.prefix ?? '',
+        last_six: row.last_six ?? '',
+    }));
+}
+
+async function searchBritishNumbers(env, { search, match, page, pageSize }) {
+    const offset = (page - 1) * pageSize;
+    const upstream = new URL(MEMORABLE_URL);
+    upstream.searchParams.set('search', search);
+    upstream.searchParams.set('type', match);
+    upstream.searchParams.set('match', 'fuzzy');
+    upstream.searchParams.set('range', `${offset}-${offset + pageSize - 1}`);
+
+    const response = await fetch(upstream.toString(), {
+        headers: {
+            Accept: 'application/json',
+            'X-API-Key': getBritishNumbersKey(env),
+        },
+    });
+
+    const text = await response.text();
+    let body = null;
+    try {
+        body = text ? JSON.parse(text) : null;
+    } catch {
+        body = null;
     }
 
+    const contentRange = response.headers.get('content-range') || '';
+
+    if (!response.ok && response.status !== 416) {
+        const message =
+            (body && (body.message || body.error)) ||
+            text ||
+            `Mobile number search failed (${response.status})`;
+        return { ok: false, status: response.status, message };
+    }
+
+    const data = mapRows(body);
+    return {
+        ok: true,
+        data,
+        total: parseTotal(contentRange, data.length),
+    };
+}
+
+async function searchSupabase(env, { search, match, page, pageSize }) {
     const { url, key } = getSupabase(env);
     const column = MATCH_COLUMNS[match];
     const offset = (page - 1) * pageSize;
     const upstream = new URL(`${url}/rest/v1/mobile_numbers`);
     upstream.searchParams.set('select', 'number,price,prefix,last_six');
     upstream.searchParams.set('available', 'eq.true');
-    upstream.searchParams.set(column, `ilike.*${digits}*`);
+    upstream.searchParams.set(column, `ilike.*${search}*`);
     upstream.searchParams.set('order', 'price.asc');
 
     const response = await fetch(upstream.toString(), {
@@ -104,20 +160,33 @@ async function handleSearch(request, env) {
             (body && (body.message || body.error || body.hint)) ||
             text ||
             `Mobile number search failed (${response.status})`;
-        return json({ data: [], page, pageSize, total: 0, error: message }, response.status);
+        return { ok: false, status: response.status, message };
     }
 
-    const rows = Array.isArray(body) ? body : [];
+    const data = mapRows(body);
+    return {
+        ok: true,
+        data,
+        total: parseTotal(contentRange, data.length),
+    };
+}
+
+async function handleSearch(request, env) {
+    const query = await readQuery(request);
+    if (query.search.length < 2) {
+        return json({ data: [], page: query.page, pageSize: query.pageSize, total: 0, error: 'Enter at least 2 characters' }, 400);
+    }
+
+    const result = await searchBritishNumbers(env, query);
+    if (!result.ok) {
+        return json({ data: [], page: query.page, pageSize: query.pageSize, total: 0, error: result.message }, result.status);
+    }
+
     return json({
-        data: rows.map(row => ({
-            number: String(row.number ?? ''),
-            price: Number(row.price ?? 0),
-            prefix: row.prefix ?? '',
-            last_six: row.last_six ?? '',
-        })),
-        page,
-        pageSize,
-        total: parseTotal(contentRange, rows.length),
+        data: result.data,
+        page: query.page,
+        pageSize: query.pageSize,
+        total: result.total,
     });
 }
 

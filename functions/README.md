@@ -13,8 +13,9 @@ In **Workers & Pages → your project → Settings → Environment variables** (
 | `COMPANIES_HOUSE_API_KEY` | Secret | Companies House API key (username only; password empty) |
 | `MAKE_CHECKOUT_WEBHOOK_URL` | Secret | Full Make.com webhook URL for checkout / lead submit |
 | `TAMAR_API_KEY` | Secret | Tamar API key (`user:pass` or username-only) |
-| `SUPABASE_URL` | Plain text | Supabase project URL for the mobile number catalogue |
-| `SUPABASE_ANON_KEY` | Secret | Supabase anon key (read-only via row security) |
+| `SUPABASE_URL` | Plain text | Supabase project URL (kept for the WeWeb catalogue path) |
+| `SUPABASE_ANON_KEY` | Secret | Supabase anon key (kept for the WeWeb catalogue path) |
+| `BRITISH_NUMBERS_API_KEY` | Secret | British Numbers API key, sent as `X-API-Key` |
 
 Airtable token scopes needed:
 
@@ -65,14 +66,14 @@ Frontend collection `apiLandline` calls same-origin `/api/landline` (no Tamar se
 
 ### Mobile numbers (`/api/mobile`)
 
-Searches the Supabase `mobile_numbers` table. Available rows only, cheapest first.
+Nuxt search calls the British Numbers memorable API. The Supabase query remains in `functions/api/mobile.js` and is not used by this route.
 
-- `match=prefix` — first part of the number
-- `match=number` — anywhere in the number
-- `match=last_six` — last part of the number
-- `q` is digits only; at least 2 are required
-- `page` starts at 1. Each page is 100 rows, matching the WeWeb collection limit
-- `total` is the Supabase `content-range` count (`0-99/1234`)
+`GET https://api.britishnumbers.com/rest/v2/mobile/memorable` with header `X-API-Key`.
+
+- `q` is sent as `search` (letters, digits, and commas)
+- `match=prefix`, `match=number`, or `match=last_six` is sent as `type`
+- `page` starts at 1. Each page is 100 rows, sent as `range=0-99`, `100-199`, and so on
+- `total` comes from the `Content-Range` header (`0-99/1363`)
 
 ### Make.com checkout
 

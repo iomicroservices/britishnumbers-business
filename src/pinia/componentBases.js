@@ -7,7 +7,6 @@ import plugin29809245a5ea4687af79952998abab22 from '@weweb-internal/ext-plugin-2
 import plugin2bd1c68831c5443eae2559aa5b6431fb from '@weweb-internal/ext-plugin-2bd1c688-31c5-443e-ae25-59aa5b6431fb/config';
 import plugind66a250d8468469ead33ee028f632398 from '@weweb-internal/ext-plugin-d66a250d-8468-469e-ad33-ee028f632398/config';
 import pluginf9ef41c31c534857855bf2f6a40b7186 from '@weweb-internal/ext-plugin-f9ef41c3-1c53-4857-855b-f2f6a40b7186/config';
-import plugin1fa0dd685069436c9a7d3b54c340f1fa from '@weweb-internal/ext-plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa/config';
 import plugin9c40819b4a8f468f9ba54b9699f3361f from '@weweb-internal/ext-plugin-9c40819b-4a8f-468f-9ba5-4b9699f3361f/config';
 import section99586bd32b154d6ba0256a50d07ca845 from '@weweb-internal/ext-section-99586bd3-2b15-4d6b-a025-6a50d07ca845/config';
 import sectionef0ecc719a594eab94b0b36d66d3d61d from '@weweb-internal/ext-section-ef0ecc71-9a59-4eab-94b0-b36d66d3d61d/config';
@@ -41,7 +40,6 @@ export const useComponentBasesStore = defineStore('componentBases', () => {
 'plugin-2bd1c688-31c5-443e-ae25-59aa5b6431fb': getInheritedConfiguration({ ...plugin2bd1c68831c5443eae2559aa5b6431fb, name: 'plugin-2bd1c688-31c5-443e-ae25-59aa5b6431fb' }),
 'plugin-d66a250d-8468-469e-ad33-ee028f632398': getInheritedConfiguration({ ...plugind66a250d8468469ead33ee028f632398, name: 'plugin-d66a250d-8468-469e-ad33-ee028f632398' }),
 'plugin-f9ef41c3-1c53-4857-855b-f2f6a40b7186': getInheritedConfiguration({ ...pluginf9ef41c31c534857855bf2f6a40b7186, name: 'plugin-f9ef41c3-1c53-4857-855b-f2f6a40b7186' }),
-'plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa': getInheritedConfiguration({ ...plugin1fa0dd685069436c9a7d3b54c340f1fa, name: 'plugin-1fa0dd68-5069-436c-9a7d-3b54c340f1fa' }),
 'plugin-9c40819b-4a8f-468f-9ba5-4b9699f3361f': getInheritedConfiguration({ ...plugin9c40819b4a8f468f9ba54b9699f3361f, name: 'plugin-9c40819b-4a8f-468f-9ba5-4b9699f3361f' }),
 'section-99586bd3-2b15-4d6b-a025-6a50d07ca845': getInheritedConfiguration({ ...section99586bd32b154d6ba0256a50d07ca845, name: 'section-99586bd3-2b15-4d6b-a025-6a50d07ca845' }),
 'section-ef0ecc71-9a59-4eab-94b0-b36d66d3d61d': getInheritedConfiguration({ ...sectionef0ecc719a594eab94b0b36d66d3d61d, name: 'section-ef0ecc71-9a59-4eab-94b0-b36d66d3d61d' }),

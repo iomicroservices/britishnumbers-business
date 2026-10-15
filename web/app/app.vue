@@ -24,15 +24,14 @@ useSeoMeta({
 const nav = [
   { label: 'Home', to: '/' },
   { label: 'Telephone', to: '/telephone-numbers' },
-  { label: 'Mobile', to: '/mobile-numbers' },
-  { label: 'Special numbers', to: '/special-numbers' }
+  { label: 'Mobile', to: '/mobile-numbers' }
 ]
 
 const route = useRoute()
 const basketOpen = useState('mobile-basket-open', () => false)
 const basketStep = useState<'items' | 'details'>('mobile-basket-step', () => 'items')
 const { basket } = useMobileShop()
-const onMobilePage = computed(() => route.path === '/mobile-numbers')
+const onMobilePage = computed(() => route.path === '/mobile-numbers' || route.path.startsWith('/mobile-numbers/'))
 
 function openBasket() {
   basketStep.value = 'items'

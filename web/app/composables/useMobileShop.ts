@@ -5,6 +5,7 @@ export interface MobileNumber {
   price: number
   prefix?: string
   last_six?: string
+  delivery?: number
 }
 
 export interface BasketItem {
@@ -17,6 +18,13 @@ export interface CompanyHit {
   title: string
   company_number: string
   address_snippet: string
+  address?: {
+    premises?: string
+    address_line_1?: string
+    address_line_2?: string
+    locality?: string
+    postal_code?: string
+  }
 }
 
 export interface CheckoutDetails {
@@ -113,7 +121,8 @@ export function useMobileShop() {
     query: string,
     match: MobileMatch,
     nextPage = 1,
-    price: { gte?: number, lte?: number } = {}
+    price: { gte?: number, lte?: number } = {},
+    append = false
   ) {
     searching.value = true
     error.value = ''
@@ -134,17 +143,36 @@ export function useMobileShop() {
         }
       })
       const rows = response.data || []
-      results.value = rows
+      results.value = append ? [...results.value, ...rows] : rows
       page.value = response.page || nextPage
-      resultTotal.value = response.total ?? rows.length
+      resultTotal.value = response.total ?? (append ? results.value.length : rows.length)
     } catch (err) {
-      results.value = []
-      page.value = nextPage
-      resultTotal.value = 0
+      if (!append) {
+        results.value = []
+        page.value = nextPage
+        resultTotal.value = 0
+      }
       error.value = errorMessage(err)
     } finally {
       searching.value = false
     }
+  }
+
+  async function findNumber(number: string) {
+    const digits = number.replace(/\D/g, '')
+    const response = await $fetch<{
+      data?: MobileNumber[]
+      error?: string
+    }>('/api/mobile', {
+      query: {
+        q: digits,
+        match: 'number',
+        precision: 'exact',
+        page: 1,
+        pageSize: 5
+      }
+    })
+    return (response.data || []).find(row => String(row.number).replace(/\D/g, '') === digits) ?? null
   }
 
   async function addToBasket(item: MobileNumber) {
@@ -199,7 +227,8 @@ export function useMobileShop() {
       companies.value = (response.items || []).map(item => ({
         title: item.title || '',
         company_number: item.company_number || '',
-        address_snippet: item.address_snippet || ''
+        address_snippet: item.address_snippet || '',
+        address: item.address
       }))
     } catch (err) {
       error.value = errorMessage(err)
@@ -297,6 +326,7 @@ export function useMobileShop() {
     inBasket,
     ensureSession,
     search,
+    findNumber,
     addToBasket,
     removeFromBasket,
     lookupCompany,

@@ -55,6 +55,7 @@ async function readQuery(request) {
     let pageSize = url.searchParams.get('pageSize') || '';
     let priceGte = url.searchParams.get('price_gte') || '';
     let priceLte = url.searchParams.get('price_lte') || '';
+    let precision = url.searchParams.get('precision') || '';
 
     if (request.method === 'POST') {
         try {
@@ -65,6 +66,7 @@ async function readQuery(request) {
             pageSize = body?.pageSize ?? pageSize;
             priceGte = body?.price_gte ?? priceGte;
             priceLte = body?.price_lte ?? priceLte;
+            precision = body?.precision || precision;
         } catch {
             // ignore invalid JSON
         }
@@ -77,6 +79,7 @@ async function readQuery(request) {
         pageSize: Math.min(readPositiveInt(pageSize, DEFAULT_PAGE_SIZE), MAX_PAGE_SIZE),
         priceGte: readOptionalNumber(priceGte),
         priceLte: readOptionalNumber(priceLte),
+        precision: precision === 'exact' ? 'exact' : 'fuzzy',
     };
 }
 
@@ -88,20 +91,24 @@ function readOptionalNumber(value) {
 
 function mapRows(body) {
     const rows = Array.isArray(body) ? body : [];
-    return rows.map(row => ({
-        number: String(row.number ?? ''),
-        price: Number(row.price ?? 0),
-        prefix: row.prefix ?? '',
-        last_six: row.last_six ?? '',
-    }));
+    return rows.map(row => {
+        const delivery = Number(row.delivery);
+        return {
+            number: String(row.number ?? ''),
+            price: Number(row.price ?? 0),
+            prefix: row.prefix ?? '',
+            last_six: row.last_six ?? '',
+            ...(Number.isFinite(delivery) ? { delivery } : {}),
+        };
+    });
 }
 
-async function searchBritishNumbers(env, { search, match, page, pageSize, priceGte, priceLte }) {
+async function searchBritishNumbers(env, { search, match, page, pageSize, priceGte, priceLte, precision }) {
     const offset = (page - 1) * pageSize;
     const upstream = new URL(MEMORABLE_URL);
     upstream.searchParams.set('search', search);
     upstream.searchParams.set('type', match);
-    upstream.searchParams.set('match', 'fuzzy');
+    upstream.searchParams.set('match', precision === 'exact' ? 'exact' : 'fuzzy');
     upstream.searchParams.set('range', `${offset}-${offset + pageSize - 1}`);
     if (priceGte != null) upstream.searchParams.set('price_gte', String(priceGte));
     if (priceLte != null) upstream.searchParams.set('price_lte', String(priceLte));

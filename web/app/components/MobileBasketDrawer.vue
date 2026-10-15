@@ -27,15 +27,41 @@ const form = reactive<CheckoutDetails>({
   address: '',
   city: '',
   postCode: '',
-  businessType: 'Sole Trader',
+  businessType: '',
   businessName: '',
   businessReg: '',
   news: false,
   conditions: false
 })
 
-const businessTypes = ['Sole Trader', 'Company', 'Partnership', 'Charity', 'Government']
+const businessTypes = [
+  { label: 'Sole Trader', value: 'soleTrader' },
+  { label: 'Company', value: 'company' },
+  { label: 'Partnership', value: 'partnership' },
+  { label: 'Charity', value: 'charity' },
+  { label: 'Government', value: 'government' }
+]
 const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' })
+const showCompanyFields = computed(() => form.businessType === 'company')
+const showBusinessName = computed(() => form.businessType !== '' && form.businessType !== 'soleTrader')
+const businessNameLabel = computed(() => {
+  switch (form.businessType) {
+    case 'company': return 'Company name'
+    case 'partnership': return 'Partnership name'
+    case 'charity': return 'Charity name'
+    case 'government': return 'Agency name'
+    default: return 'Business name'
+  }
+})
+
+watch(() => form.businessType, (type) => {
+  if (type !== 'company') {
+    form.businessReg = ''
+    companyQuery.value = ''
+    companies.value = []
+  }
+  if (type === '' || type === 'soleTrader') form.businessName = ''
+})
 
 const title = computed(() => step.value === 'items' ? 'Basket' : 'Your details')
 const description = computed(() => (
@@ -53,10 +79,21 @@ async function onLookup() {
   await lookupCompany(companyQuery.value.trim())
 }
 
+function streetAddress(hit: CompanyHit) {
+  const address = hit.address
+  if (!address) return ''
+  return [address.premises, address.address_line_1, address.address_line_2]
+    .map(part => part?.trim())
+    .filter(Boolean)
+    .join(', ')
+}
+
 async function chooseCompany(hit: CompanyHit) {
   form.businessName = hit.title
   form.businessReg = hit.company_number
-  if (hit.address_snippet) form.address = hit.address_snippet
+  form.address = streetAddress(hit)
+  form.city = hit.address?.locality?.trim() || ''
+  form.postCode = hit.address?.postal_code?.trim() || ''
   companies.value = []
   try {
     await saveCompany(hit)
@@ -152,6 +189,71 @@ async function onCheckout() {
           >
             Back to basket
           </UButton>
+          <UFormField label="Business type">
+            <USelect
+              v-model="form.businessType"
+              :items="businessTypes"
+              placeholder="Business type"
+              class="w-full"
+            />
+          </UFormField>
+          <template v-if="showCompanyFields">
+            <UFormField label="Search by company name or number">
+              <div class="flex gap-2">
+                <UInput
+                  v-model="companyQuery"
+                  placeholder="Lookup a registered business"
+                  class="w-full"
+                  @keydown.enter.prevent="onLookup"
+                />
+                <UButton
+                  type="button"
+                  color="neutral"
+                  variant="outline"
+                  :loading="lookingUp"
+                  @click="onLookup"
+                >
+                  Lookup
+                </UButton>
+              </div>
+            </UFormField>
+            <ul
+              v-if="companies.length"
+              class="max-h-40 overflow-auto rounded-md border border-default"
+            >
+              <li
+                v-for="hit in companies"
+                :key="hit.company_number"
+              >
+                <button
+                  type="button"
+                  class="w-full px-3 py-2 text-left hover:bg-elevated"
+                  @click="chooseCompany(hit)"
+                >
+                  <span class="block text-sm font-medium text-highlighted">{{ hit.title }}</span>
+                  <span class="block text-xs text-muted">{{ hit.company_number }} · {{ hit.address_snippet }}</span>
+                </button>
+              </li>
+            </ul>
+          </template>
+          <UFormField
+            v-if="showBusinessName"
+            :label="businessNameLabel"
+          >
+            <UInput
+              v-model="form.businessName"
+              class="w-full"
+            />
+          </UFormField>
+          <UFormField
+            v-if="showCompanyFields"
+            label="Company reg number"
+          >
+            <UInput
+              v-model="form.businessReg"
+              class="w-full"
+            />
+          </UFormField>
           <div class="grid gap-4 sm:grid-cols-2">
             <UFormField
               label="First name"
@@ -228,62 +330,6 @@ async function onCheckout() {
               />
             </UFormField>
           </div>
-          <UFormField label="Business type">
-            <USelect
-              v-model="form.businessType"
-              :items="businessTypes"
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField label="Search by company name or number">
-            <div class="flex gap-2">
-              <UInput
-                v-model="companyQuery"
-                placeholder="Lookup a registered business"
-                class="w-full"
-                @keydown.enter.prevent="onLookup"
-              />
-              <UButton
-                type="button"
-                color="neutral"
-                variant="outline"
-                :loading="lookingUp"
-                @click="onLookup"
-              >
-                Lookup
-              </UButton>
-            </div>
-          </UFormField>
-          <ul
-            v-if="companies.length"
-            class="max-h-40 overflow-auto rounded-md border border-default"
-          >
-            <li
-              v-for="hit in companies"
-              :key="hit.company_number"
-            >
-              <button
-                type="button"
-                class="w-full px-3 py-2 text-left hover:bg-elevated"
-                @click="chooseCompany(hit)"
-              >
-                <span class="block text-sm font-medium text-highlighted">{{ hit.title }}</span>
-                <span class="block text-xs text-muted">{{ hit.company_number }} · {{ hit.address_snippet }}</span>
-              </button>
-            </li>
-          </ul>
-          <UFormField label="Business name">
-            <UInput
-              v-model="form.businessName"
-              class="w-full"
-            />
-          </UFormField>
-          <UFormField label="Company reg number">
-            <UInput
-              v-model="form.businessReg"
-              class="w-full"
-            />
-          </UFormField>
           <UCheckbox
             v-model="form.news"
             label="Contact me about new offers"

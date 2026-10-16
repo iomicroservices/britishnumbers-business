@@ -45,7 +45,7 @@ const GRADE_BANDS = {
     Platinum: [300, 500000],
 };
 
-const PAGE_SIZE = 100;
+const PAGE_SIZE = 90;
 const CACHE_MS = 5 * 60 * 1000;
 const areaCache = new Map();
 

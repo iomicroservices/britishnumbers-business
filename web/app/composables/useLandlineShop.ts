@@ -39,7 +39,7 @@ export interface LandlineAdd {
   whisper: boolean
 }
 
-export const LANDLINE_PAGE_SIZE = 100
+export const LANDLINE_PAGE_SIZE = 90
 
 export const LANDLINE_PLANS: { id: LandlinePlanId, name: string, monthly: number }[] = [
   { id: '3', name: 'PAYG Plan', monthly: 3 },
@@ -164,6 +164,7 @@ export function useLandlineShop() {
   const lookingUp = ref(false)
   const error = ref('')
   const catalogue = ref<LandlineNumber[] | null>(null)
+  let requestId = 0
 
   const monthly = computed(() => basket.value.reduce((sum, item) => sum + Number(item.mrc || 0) + featureCost(item), 0))
   const connectionTotal = computed(() => basket.value.reduce((sum, item) => sum + Number(item.price || 0), 0))
@@ -235,6 +236,7 @@ export function useLandlineShop() {
   }
 
   async function search(areaCode: string, grade: LandlineGrade, nextPage = 1, append = false) {
+    const id = ++requestId
     searching.value = true
     error.value = ''
     try {
@@ -242,6 +244,8 @@ export function useLandlineShop() {
         publish(catalogue.value, grade, nextPage)
         return
       }
+
+      if (!append) catalogue.value = null
 
       const response = await $fetch<LandlineNumber[] | {
         data?: LandlineNumber[]
@@ -256,6 +260,8 @@ export function useLandlineShop() {
         }
       })
 
+      if (id !== requestId) return
+
       if (Array.isArray(response)) {
         catalogue.value = response.map(row => ({
           number: String(row.number || ''),
@@ -265,7 +271,6 @@ export function useLandlineShop() {
         return
       }
 
-      catalogue.value = null
       const rows = (response.data || []).map(row => ({
         number: String(row.number || ''),
         price: Number(row.price || 0)
@@ -274,6 +279,7 @@ export function useLandlineShop() {
       page.value = response.page || nextPage
       resultTotal.value = response.total ?? rows.length
     } catch (err) {
+      if (id !== requestId) return
       if (!append) {
         results.value = []
         page.value = nextPage
@@ -282,12 +288,13 @@ export function useLandlineShop() {
       }
       error.value = errorMessage(err)
     } finally {
-      searching.value = false
+      if (id === requestId) searching.value = false
     }
   }
 
   function refilter(grade: LandlineGrade) {
     if (!catalogue.value) return false
+    requestId += 1
     publish(catalogue.value, grade, 1)
     return true
   }

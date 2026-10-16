@@ -42,7 +42,7 @@ export interface CheckoutDetails {
   conditions: boolean
 }
 
-export const MOBILE_PAGE_SIZE = 100
+export const MOBILE_PAGE_SIZE = 90
 
 const SESSION_KEY = 'bn-mobile-session'
 const BASKET = 'f307c3b2-c35c-4fda-8eeb-8519409853ea'

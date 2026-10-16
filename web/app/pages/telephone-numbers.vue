@@ -26,13 +26,15 @@ const {
   removeFromBasket
 } = useLandlineShop()
 
-const kind = ref<NumberKind>('0102')
+const kind = ref<NumberKind>('0333')
 const areaCode = ref('0208')
 const grade = ref<LandlineGrade>('All')
 const hasLoaded = ref(false)
 const loadingMore = ref(false)
 const filtersOpen = ref(false)
 const planOpen = ref(false)
+const planPickerOpen = ref(false)
+const previewPlan = ref<LandlinePlanId | null>(null)
 const selected = ref<LandlineNumber | null>(null)
 const plan = ref<LandlinePlanId>('3')
 const destination = ref('')
@@ -83,10 +85,10 @@ const remaining = computed(() => Math.max(0, resultTotal.value - results.value.l
 const remainingLabel = computed(() => `${remaining.value.toLocaleString('en-GB')} number${remaining.value === 1 ? '' : 's'} still to see`)
 const showSkeleton = computed(() => !hasLoaded.value || (searching.value && results.value.length === 0))
 
-const forwarding = computed(() => {
+function planForwarding(id: LandlinePlanId) {
   const freephone = kind.value === '0800'
-  if (plan.value === '11') return 'Forward calls for free to your landline or mobile number.'
-  if (plan.value === '14') {
+  if (id === '11') return 'Forward calls for free to your landline or mobile number.'
+  if (id === '14') {
     return freephone
       ? 'Forward calls at 1.5p/min from a landline and 6.5p/min from a mobile.'
       : 'Forward calls at 1.5p/minute to your landline or mobile number.'
@@ -94,7 +96,53 @@ const forwarding = computed(() => {
   return freephone
     ? 'Forward calls at 3p/min from a landline and 8p/min from a mobile.'
     : 'Forward calls at 3p/minute to your landline or mobile number.'
+}
+
+const planFeatures = ['switchboard', 'team', 'whisper'] as const
+
+function featureChecked(id: LandlinePlanId, feature: typeof planFeatures[number]) {
+  if (id === '14') return true
+  if (id === '11') return feature === 'whisper'
+  if (feature === 'switchboard') return switchboard.value
+  if (feature === 'team') return team.value
+  return whisper.value
+}
+
+function featureLabel(id: LandlinePlanId, feature: typeof planFeatures[number]) {
+  if (id === '3') {
+    if (feature === 'switchboard') return 'Switchboard +£6/month'
+    if (feature === 'team') return 'Team coverage +£3/month'
+    return 'Call whisper +£3/month'
+  }
+  const state = id === '14' || (id === '11' && feature === 'whisper') ? 'included' : 'n/a'
+  if (feature === 'switchboard') return `Switchboard (${state})`
+  if (feature === 'team') return `Team coverage (${state})`
+  return `Call whisper (${state})`
+}
+
+function setFeature(feature: typeof planFeatures[number], value: boolean) {
+  if (plan.value !== '3') return
+  if (feature === 'switchboard') switchboard.value = value
+  else if (feature === 'team') team.value = value
+  else whisper.value = value
+}
+
+function planShortName(id: LandlinePlanId) {
+  if (id === '3') return 'PAYG'
+  if (id === '11') return 'Individual'
+  return 'Business'
+}
+
+const previewChoice = computed(() => LANDLINE_PLANS.find(option => option.id === previewPlan.value))
+const previewLabel = computed(() => {
+  if (!previewChoice.value) return 'Choose plan'
+  return `${planShortName(previewChoice.value.id)} · £${previewChoice.value.monthly}/month`
 })
+
+function connectionFeeLine(price: number) {
+  if (!Number(price)) return 'No connection fee'
+  return `${connectionLabel(price)} connection fee`
+}
 
 const planAddons = computed(() => {
   if (plan.value === '14') {
@@ -118,10 +166,6 @@ async function showNumbers(nextPage = 1, append = false) {
   hasLoaded.value = true
 }
 
-async function onSearch() {
-  if (!searching.value) await showNumbers(1, false)
-}
-
 async function loadMore() {
   if (searching.value || remaining.value <= 0) return
   loadingMore.value = true
@@ -134,18 +178,25 @@ async function loadMore() {
 
 function resetFilters() {
   resetting = true
-  kind.value = '0102'
+  kind.value = '0333'
   areaCode.value = '0208'
   grade.value = 'All'
+  previewPlan.value = null
+  planPickerOpen.value = false
   nextTick(() => {
     resetting = false
     showNumbers(1, false)
   })
 }
 
+function choosePreview(id: LandlinePlanId) {
+  previewPlan.value = id
+  planPickerOpen.value = false
+}
+
 function openPlan(item: LandlineNumber) {
   selected.value = item
-  plan.value = '3'
+  plan.value = previewPlan.value ?? '3'
   destination.value = ''
   switchboard.value = false
   team.value = false
@@ -177,13 +228,13 @@ async function confirmPlan() {
 }
 
 watch(grade, () => {
-  if (resetting || !hasLoaded.value || searching.value) return
+  if (resetting) return
   if (refilter(grade.value)) return
   showNumbers(1, false)
 })
 
 watch([kind, areaCode], () => {
-  if (resetting || !hasLoaded.value || searching.value) return
+  if (resetting) return
   showNumbers(1, false)
 })
 
@@ -196,9 +247,8 @@ onMounted(() => {
 
 <template>
   <div>
-    <form
+    <div
       class="sticky top-(--ui-header-height) z-40 flex flex-col gap-3 border-b border-default bg-default/75 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:px-6"
-      @submit.prevent="onSearch"
     >
       <div class="flex items-center justify-between gap-3 sm:contents">
         <UTooltip class="shrink-0 sm:order-1">
@@ -220,7 +270,7 @@ onMounted(() => {
           color="error"
           variant="soft"
           size="lg"
-          class="sm:order-5"
+          class="sm:order-6"
           @click="resetFilters"
         >
           Reset
@@ -240,6 +290,45 @@ onMounted(() => {
       >
         {{ kindLabel }} · {{ gradeLabel }}
       </UButton>
+
+      <UPopover
+        v-model:open="planPickerOpen"
+        class="w-full sm:order-5 sm:w-auto"
+        :content="{ align: 'start', collisionPadding: 16, sideOffset: 8 }"
+        :ui="{ content: 'max-w-[calc(100vw-2rem)]' }"
+      >
+        <UButton
+          color="neutral"
+          variant="outline"
+          size="lg"
+          trailing
+          trailing-icon="i-lucide-chevron-down"
+          class="relative w-full justify-start text-left sm:w-56"
+          :ui="{
+            base: 'px-3 py-2 pe-10 text-base/5 font-normal text-highlighted md:text-sm',
+            trailingIcon: `${planPickerOpen ? 'rotate-180' : ''} pointer-events-none absolute end-3 top-1/2 size-5 -translate-y-1/2 text-dimmed transition-transform`
+          }"
+          :aria-expanded="planPickerOpen"
+        >
+          <span class="truncate">{{ previewLabel }}</span>
+        </UButton>
+        <template #content>
+          <div class="flex max-h-[min(24rem,calc(100dvh-5rem))] w-[min(20rem,calc(100vw-2rem))] flex-col gap-2 overflow-y-auto p-3 text-left">
+            <button
+              v-for="option in LANDLINE_PLANS"
+              :key="option.id"
+              type="button"
+              class="rounded-md border px-3 py-3 text-left transition"
+              :class="previewPlan === option.id ? 'border-primary bg-primary/10' : 'border-default hover:bg-elevated'"
+              @click="choosePreview(option.id)"
+            >
+              <span class="block text-left font-medium text-highlighted">{{ option.name }}</span>
+              <span class="mt-0.5 block text-left text-sm text-muted">£{{ option.monthly }}/month</span>
+              <span class="mt-2 block text-left text-sm text-muted">{{ planForwarding(option.id).replace(' to your landline or mobile number', '') }}</span>
+            </button>
+          </div>
+        </template>
+      </UPopover>
 
       <div
         class="flex-col gap-3 sm:contents"
@@ -270,15 +359,7 @@ onMounted(() => {
         />
       </div>
 
-      <UButton
-        type="submit"
-        size="lg"
-        class="sm:order-6"
-        :loading="searching && !loadingMore"
-      >
-        Search
-      </UButton>
-    </form>
+    </div>
 
     <UContainer class="py-10">
       <div class="max-w-3xl">
@@ -351,14 +432,22 @@ onMounted(() => {
           >
             <UCard
               class="transition-colors duration-300"
-              :class="inBasket(item.number) ? 'bg-info/10 ring-info/25' : ''"
+              :class="inBasket(item.number) ? 'bg-info/10 ring-info/25' : 'bg-elevated'"
               :ui="{ body: 'p-3 sm:p-4' }"
             >
               <div class="flex items-center justify-between gap-3">
-                <p class="min-w-0 truncate text-base font-semibold tabular-nums tracking-wide whitespace-nowrap text-highlighted sm:text-lg">
-                  {{ formatLandline(item.number, activeArea) }}
-                  <span class="text-sm font-medium text-muted">· {{ connectionLabel(item.price) }}</span>
-                </p>
+                <div class="min-w-0">
+                  <p class="truncate text-base font-semibold tabular-nums tracking-wide whitespace-nowrap text-highlighted sm:text-lg">
+                    {{ formatLandline(item.number, activeArea) }}
+                    <span
+                      v-if="previewChoice"
+                      class="text-sm font-medium text-muted"
+                    >· £{{ previewChoice.monthly }}/month</span>
+                  </p>
+                  <p class="truncate text-sm text-muted">
+                    {{ connectionFeeLine(item.price) }}
+                  </p>
+                </div>
                 <div class="relative shrink-0">
                   <UButton
                     icon="i-lucide-plus"
@@ -437,52 +526,41 @@ onMounted(() => {
           </p>
 
           <div class="grid gap-2">
-            <button
+            <div
               v-for="option in LANDLINE_PLANS"
               :key="option.id"
-              type="button"
-              class="rounded-md border px-3 py-3 text-left transition"
-              :class="plan === option.id ? 'border-primary bg-primary/10' : 'border-default hover:bg-elevated'"
-              @click="plan = option.id"
+              class="overflow-hidden rounded-md border text-left transition"
+              :class="plan === option.id ? 'border-primary bg-primary/10' : 'border-default'"
             >
-              <span class="block font-medium text-highlighted">{{ option.name }}</span>
-              <span class="block text-sm text-muted">£{{ option.monthly }}/month</span>
-            </button>
+              <button
+                type="button"
+                class="w-full px-3 py-3 text-left"
+                :class="plan === option.id ? '' : 'hover:bg-elevated'"
+                @click="plan = option.id"
+              >
+                <span class="block font-medium text-highlighted">{{ option.name }}</span>
+                <span class="block text-sm text-muted">£{{ option.monthly }}/month</span>
+              </button>
+              <div
+                v-if="plan === option.id"
+                class="flex flex-col gap-2 px-3 pb-3"
+              >
+                <p class="text-sm text-muted">
+                  {{ planForwarding(option.id) }}
+                </p>
+                <div class="flex flex-col gap-2">
+                  <UCheckbox
+                    v-for="feature in planFeatures"
+                    :key="feature"
+                    :model-value="featureChecked(option.id, feature)"
+                    :disabled="option.id !== '3'"
+                    :label="featureLabel(option.id, feature)"
+                    @update:model-value="setFeature(feature, Boolean($event))"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
-
-          <p class="text-sm text-muted">
-            {{ forwarding }}
-          </p>
-
-          <div
-            v-if="plan === '3'"
-            class="flex flex-col gap-2"
-          >
-            <UCheckbox
-              v-model="switchboard"
-              label="Switchboard +£6/month"
-            />
-            <UCheckbox
-              v-model="team"
-              label="Team coverage +£3/month"
-            />
-            <UCheckbox
-              v-model="whisper"
-              label="Call whisper +£3/month"
-            />
-          </div>
-          <p
-            v-else-if="plan === '11'"
-            class="text-sm text-muted"
-          >
-            Call whisper included. Switchboard and team coverage are not on this plan.
-          </p>
-          <p
-            v-else
-            class="text-sm text-muted"
-          >
-            Switchboard, call whisper and team coverage included.
-          </p>
 
           <UFormField
             label="Divert my calls to"

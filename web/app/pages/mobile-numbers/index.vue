@@ -510,7 +510,7 @@ async function loadMore() {
           >
             <UCard
               class="transition-colors duration-300"
-              :class="inBasket(item.number) ? 'bg-info/10 ring-info/25' : ''"
+              :class="inBasket(item.number) ? 'bg-info/10 ring-info/25' : 'bg-elevated'"
               :ui="{ body: 'p-3 sm:p-4' }"
             >
               <div class="flex items-center justify-between gap-3">

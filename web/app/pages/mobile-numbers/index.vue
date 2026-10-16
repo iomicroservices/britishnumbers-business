@@ -31,6 +31,7 @@ function cleanPart(value: string) {
 const route = useRoute()
 const router = useRouter()
 const { withSearch } = useMobileSearchQuery()
+const { isWide } = useWideLayout()
 const initialSearch = readMobileSearch(route.query)
 const initialParts = initialSearch.q.split(',')
 const query = ref(initialSearch.mode === 'multi' ? '07' : initialSearch.q)
@@ -41,7 +42,7 @@ const ends = ref(initialSearch.mode === 'multi' ? cleanPart(initialParts[2] || '
 
 const matchOptions = [
   { label: 'Anywhere', value: 'number' },
-  { label: 'Multi-search', value: 'multi' },
+  { label: 'Multi-part', value: 'multi' },
   { label: 'Prefix', value: 'prefix' },
   { label: 'Ending', value: 'last_six' }
 ]
@@ -61,6 +62,11 @@ function currentTerm() {
 
 const priceOpen = ref(false)
 const filtersOpen = ref(false)
+const filterSection = ref<HTMLElement | null>(null)
+useDismissFilters(filtersOpen, filterSection)
+watch(filtersOpen, (value) => {
+  if (!value) priceOpen.value = false
+})
 const modeLabel = computed(() => matchOptions.find(option => option.value === mode.value)?.label ?? 'Anywhere')
 const priceGte = ref(initialSearch.min != null ? String(initialSearch.min) : '')
 const priceLte = ref(initialSearch.max != null ? String(initialSearch.max) : '')
@@ -234,11 +240,16 @@ function resetFilters() {
   onSearch()
 }
 
+function commaParts(value: string) {
+  return value.replace(/[^A-Za-z0-9,]/g, '').split(',')
+}
+
 watch(mode, (next, prev) => {
   if (resetting || applyingMode) return
   applyingMode = true
+  let searchNow = true
   if (next === 'multi' && prev !== 'multi') {
-    const parts = query.value.replace(/[^A-Za-z0-9,]/g, '').split(',')
+    const parts = commaParts(query.value)
     if (parts.length > 1) {
       starts.value = cleanPart(parts[0] || '')
       contains.value = cleanPart(parts[1] || '')
@@ -248,17 +259,28 @@ watch(mode, (next, prev) => {
       contains.value = cleanPart(parts[0] || '')
       ends.value = ''
     }
-  } else if (prev === 'multi' && next !== 'multi') {
-    if (next === 'number') {
-      query.value = multiTerm()
-    } else if (next === 'prefix') {
-      query.value = cleanPart(starts.value) || cleanPart(contains.value) || cleanPart(ends.value)
+  } else if (next === 'prefix' || next === 'last_six') {
+    const fromPositions = prev === 'multi' || (prev === 'number' && query.value.includes(','))
+    const switchingEnd = (prev === 'prefix' && next === 'last_six') || (prev === 'last_six' && next === 'prefix')
+    if (fromPositions) {
+      const parts = prev === 'multi'
+        ? [starts.value, contains.value, ends.value]
+        : commaParts(query.value)
+      query.value = cleanPart(parts[next === 'prefix' ? 0 : 2] || '')
+      searchNow = query.value.length > 0
+    } else if (switchingEnd) {
+      query.value = ''
+      searchNow = false
     } else {
-      query.value = cleanPart(ends.value) || cleanPart(contains.value) || cleanPart(starts.value)
+      query.value = cleanPart(query.value)
+      searchNow = query.value.length > 0
     }
+  } else if (prev === 'multi' && next === 'number') {
+    query.value = multiTerm()
   }
   applyingMode = false
-  onSearch()
+  if (searchNow) onSearch()
+  else clearSearchTimer()
 }, { flush: 'sync' })
 
 onUnmounted(clearSearchTimer)
@@ -278,165 +300,181 @@ async function loadMore() {
 
 <template>
   <div>
-    <form
-      class="sticky top-(--ui-header-height) z-40 border-b border-default bg-default/75 backdrop-blur-sm"
-      @submit.prevent="onSearch"
-    >
-      <UContainer class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
-      <div class="flex items-center justify-between gap-3 sm:contents">
-        <UTooltip class="shrink-0 sm:order-1">
-          <UButton
-            :to="withSearch('/mobile-numbers/search-guide')"
-            icon="i-lucide-info"
-            color="info"
-            variant="soft"
-            size="lg"
-            square
-            aria-label="Search guide"
-          />
-          <template #content>
-            <span>Match the start, middle, or end to pinpoint your number. </span>
-            <NuxtLink
-              :to="withSearch('/mobile-numbers/search-guide')"
-              class="font-medium underline"
-            >
-              Search guide
-            </NuxtLink>
-          </template>
-        </UTooltip>
-        <UButton
-          type="button"
-          icon="i-lucide-rotate-ccw"
-          color="error"
-          variant="soft"
-          size="lg"
-          class="sm:order-5"
-          @click="resetFilters"
+    <div class="sticky top-(--ui-header-height) z-40 border-b border-default bg-default/75 backdrop-blur-sm lg:hidden">
+      <UContainer class="py-3">
+        <Teleport
+          to="#shop-search-slot"
+          :disabled="!isWide"
         >
-          Reset
-        </UButton>
-      </div>
-      <div class="w-full min-w-0 sm:order-2 sm:flex-1">
-        <div
-          v-if="mode === 'multi'"
-          class="grid grid-cols-3 gap-2"
-        >
-          <UInput
-            v-model="starts"
-            size="lg"
-            placeholder="Starts"
-            inputmode="numeric"
-            maxlength="11"
-            class="min-w-0"
-            aria-label="Starts"
-          />
-          <UInput
-            v-model="contains"
-            size="lg"
-            placeholder="Contains"
-            inputmode="numeric"
-            maxlength="11"
-            class="min-w-0"
-            aria-label="Contains"
-          />
-          <UInput
-            v-model="ends"
-            size="lg"
-            placeholder="Ends"
-            inputmode="numeric"
-            maxlength="11"
-            class="min-w-0"
-            aria-label="Ends"
-          />
-        </div>
-        <UInput
-          v-else
-          v-model="query"
-          icon="i-lucide-search"
-          size="lg"
-          placeholder="Search by digits, e.g. 07747 or 123"
-          inputmode="numeric"
-          class="w-full"
-          aria-label="Search by digits"
-        />
-      </div>
-      <div class="flex flex-col gap-3 sm:contents">
-        <UButton
-          type="button"
-          color="neutral"
-          variant="outline"
-          size="lg"
-          icon="i-lucide-sliders-horizontal"
-          :trailing-icon="filtersOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-          class="justify-between sm:hidden"
-          :aria-expanded="filtersOpen"
-          @click="filtersOpen = !filtersOpen"
-        >
-          {{ modeLabel }} · {{ priceLabel }}
-        </UButton>
-        <div
-          class="flex-col gap-3 sm:contents"
-          :class="filtersOpen ? 'flex' : 'hidden sm:contents'"
-        >
-          <USelect
-            v-model="mode"
-            :items="matchOptions"
-            size="lg"
-            class="w-full sm:order-3 sm:w-44"
-            aria-label="Search in"
-          />
-          <UPopover
-            v-model:open="priceOpen"
-            class="sm:order-4"
+          <form
+            class="flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:gap-2"
+            @submit.prevent="onSearch"
           >
-            <UButton
-              color="neutral"
-              variant="outline"
-              size="lg"
-              icon="i-lucide-banknote"
-              class="w-full justify-between sm:w-44"
-              aria-label="Price"
-            >
-              {{ priceLabel }}
-            </UButton>
-            <template #content>
-              <div class="flex w-64 flex-col gap-3 p-3">
-                <UFormField label="Minimum £">
-                  <UInput
-                    v-model="priceGte"
-                    type="number"
-                    min="0"
-                    step="1"
-                    placeholder="Any"
-                    class="w-full"
-                    @keydown.enter.prevent="applyPrice"
-                  />
-                </UFormField>
-                <UFormField label="Maximum £">
-                  <UInput
-                    v-model="priceLte"
-                    type="number"
-                    min="0"
-                    step="1"
-                    placeholder="Any"
-                    class="w-full"
-                    @keydown.enter.prevent="applyPrice"
-                  />
-                </UFormField>
-                <UButton
-                  type="button"
-                  block
-                  @click="applyPrice"
-                >
-                  Apply
-                </UButton>
+            <div class="w-full min-w-0 lg:order-2 lg:flex-1">
+              <div
+                v-if="mode === 'multi'"
+                class="grid grid-cols-3 gap-2"
+              >
+                <UInput
+                  v-model="starts"
+                  :size="isWide ? 'md' : 'lg'"
+                  placeholder="Starts"
+                  inputmode="numeric"
+                  maxlength="11"
+                  class="min-w-0"
+                  aria-label="Starts"
+                />
+                <UInput
+                  v-model="contains"
+                  :size="isWide ? 'md' : 'lg'"
+                  placeholder="Contains"
+                  inputmode="numeric"
+                  maxlength="11"
+                  class="min-w-0"
+                  aria-label="Contains"
+                />
+                <UInput
+                  v-model="ends"
+                  :size="isWide ? 'md' : 'lg'"
+                  placeholder="Ends"
+                  inputmode="numeric"
+                  maxlength="11"
+                  class="min-w-0"
+                  aria-label="Ends"
+                />
               </div>
-            </template>
-          </UPopover>
-        </div>
-      </div>
+              <UInput
+                v-else
+                v-model="query"
+                icon="i-lucide-search"
+                :size="isWide ? 'md' : 'lg'"
+                placeholder="Search by digits, e.g. 07747 or 123"
+                inputmode="numeric"
+                class="w-full"
+                aria-label="Search by digits"
+              />
+            </div>
+            <div
+              ref="filterSection"
+              class="contents"
+            >
+            <div class="flex items-center gap-2 lg:contents">
+              <UButton
+                type="button"
+                color="neutral"
+                variant="outline"
+                :size="isWide ? 'md' : 'lg'"
+                icon="i-lucide-sliders-horizontal"
+                :trailing-icon="filtersOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                class="min-w-0 flex-1 justify-between lg:hidden"
+                :aria-expanded="filtersOpen"
+                @click="filtersOpen = !filtersOpen"
+              >
+                {{ modeLabel }} · {{ priceLabel }}
+              </UButton>
+              <UButton
+                type="button"
+                icon="i-lucide-rotate-ccw"
+                color="error"
+                variant="soft"
+                :size="isWide ? 'md' : 'lg'"
+                square
+                aria-label="Reset"
+                class="shrink-0 lg:order-5"
+                @click="resetFilters"
+              />
+            </div>
+            <div
+              class="flex-col gap-3 overflow-anchor-none lg:contents"
+              :class="filtersOpen ? 'flex' : 'hidden'"
+            >
+              <USelect
+                v-model="mode"
+                :items="matchOptions"
+                icon="i-lucide-text-search"
+                :size="isWide ? 'md' : 'lg'"
+                class="w-full lg:order-3 lg:w-40"
+                :ui="{ base: 'text-sm!' }"
+                aria-label="Search in"
+              />
+              <UPopover
+                v-model:open="priceOpen"
+                class="lg:order-4"
+              >
+                <UButton
+                  color="neutral"
+                  variant="outline"
+                  :size="isWide ? 'md' : 'lg'"
+                  icon="i-lucide-banknote"
+                  class="w-full justify-start font-normal lg:w-40"
+                  :ui="{ leadingIcon: 'text-dimmed' }"
+                  aria-label="Price"
+                >
+                  {{ priceLabel }}
+                </UButton>
+                <template #content>
+                  <div class="flex w-64 flex-col gap-3 p-3">
+                    <UFormField label="Minimum £">
+                      <UInput
+                        v-model="priceGte"
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="Any"
+                        class="w-full"
+                        @keydown.enter.prevent="applyPrice"
+                      />
+                    </UFormField>
+                    <UFormField label="Maximum £">
+                      <UInput
+                        v-model="priceLte"
+                        type="number"
+                        min="0"
+                        step="1"
+                        placeholder="Any"
+                        class="w-full"
+                        @keydown.enter.prevent="applyPrice"
+                      />
+                    </UFormField>
+                    <UButton
+                      type="button"
+                      block
+                      @click="applyPrice"
+                    >
+                      Apply
+                    </UButton>
+                  </div>
+                </template>
+              </UPopover>
+              <UTooltip class="lg:order-1 lg:shrink-0">
+                <UButton
+                  :to="withSearch('/mobile-numbers/search-guide')"
+                  icon="i-lucide-info"
+                  color="info"
+                  variant="soft"
+                  :size="isWide ? 'md' : 'lg'"
+                  class="w-full justify-start lg:w-auto"
+                  :square="isWide"
+                  aria-label="Search guide"
+                >
+                  <span class="lg:hidden">Search guide</span>
+                </UButton>
+                <template #content>
+                  <span>Match the start, middle, or end to pinpoint your number. </span>
+                  <NuxtLink
+                    :to="withSearch('/mobile-numbers/search-guide')"
+                    class="font-medium underline"
+                  >
+                    Search guide
+                  </NuxtLink>
+                </template>
+              </UTooltip>
+            </div>
+            </div>
+          </form>
+        </Teleport>
       </UContainer>
-    </form>
+    </div>
 
     <UContainer class="py-10">
     <div class="max-w-3xl">
@@ -514,44 +552,48 @@ async function loadMore() {
             :class="searching && !loadingMore ? 'pointer-events-none opacity-60' : ''"
           >
             <UCard
-              class="transition-colors duration-300"
-              :class="inBasket(item.number) ? 'bg-info/10 ring-info/25' : 'bg-elevated'"
-              :ui="{ body: 'p-3 sm:p-4' }"
+              class="bg-elevated"
+              :ui="{ root: 'ring-0', body: 'p-0 sm:p-0' }"
             >
-              <div class="flex items-center justify-between gap-3">
+              <div class="flex items-stretch">
                 <NuxtLink
                   :to="withSearch(`/mobile-numbers/${item.number.replace(/\D/g, '')}`)"
-                  class="min-w-0 text-base font-semibold tabular-nums tracking-wide whitespace-nowrap text-highlighted hover:text-primary sm:text-lg"
+                  class="flex min-w-0 flex-1 items-center border-y border-s border-default px-3 py-3 text-xl font-semibold tabular-nums tracking-wide text-highlighted hover:text-primary sm:px-4 sm:text-lg xl:text-xl"
                 >
-                  {{ formatNumber(item.number) }}
-                  <span class="text-sm font-medium text-muted">· {{ formatPrice(item.price) }}</span>
+                  <span class="truncate">
+                    {{ formatNumber(item.number) }}
+                    <span class="text-base font-medium text-muted sm:text-sm xl:text-base">· {{ formatPrice(item.price) }}</span>
+                  </span>
                 </NuxtLink>
-                <div class="relative shrink-0">
-                  <UButton
-                    icon="i-lucide-plus"
-                    color="primary"
-                    variant="solid"
-                    aria-label="Add to basket"
-                    :tabindex="inBasket(item.number) ? -1 : 0"
-                    :aria-hidden="inBasket(item.number)"
-                    class="transition-opacity duration-300"
-                    :class="inBasket(item.number) ? 'pointer-events-none opacity-0' : 'opacity-100'"
-                    :disabled="!inBasket(item.number) && (basketBusy || !ready)"
-                    @click="addToBasket(item)"
+                <button
+                  type="button"
+                  class="group flex w-16 shrink-0 items-center justify-center border transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-current disabled:cursor-not-allowed disabled:opacity-60"
+                  :class="inBasket(item.number) ? 'border-success/10 bg-success/10 text-success lg:hover:border-error/10 lg:hover:bg-error/10 lg:hover:text-error lg:focus-visible:border-error/10 lg:focus-visible:bg-error/10 lg:focus-visible:text-error' : 'border-primary/10 bg-primary/10 text-primary hover:border-primary/15 hover:bg-primary/15'"
+                  :aria-label="inBasket(item.number) ? 'Remove from basket' : 'Add to basket'"
+                  :disabled="basketBusy || !ready"
+                  @click="inBasket(item.number) ? removeBasketNumber(item.number) : addToBasket(item)"
+                >
+                  <UIcon
+                    v-if="!inBasket(item.number)"
+                    name="i-lucide-plus"
+                    class="size-6"
                   />
-                  <UButton
-                    icon="i-lucide-minus"
-                    color="error"
-                    variant="soft"
-                    aria-label="Remove from basket"
-                    :tabindex="inBasket(item.number) ? 0 : -1"
-                    :aria-hidden="!inBasket(item.number)"
-                    class="absolute inset-0 transition-opacity duration-300"
-                    :class="inBasket(item.number) ? 'opacity-100' : 'pointer-events-none opacity-0'"
-                    :disabled="inBasket(item.number) && (basketBusy || !ready)"
-                    @click="removeBasketNumber(item.number)"
-                  />
-                </div>
+                  <template v-else>
+                    <UIcon
+                      name="i-lucide-x"
+                      class="size-5 lg:hidden"
+                    />
+                    <span class="hidden w-full place-items-center lg:inline-grid">
+                      <UIcon
+                        name="i-lucide-check"
+                        class="col-start-1 row-start-1 size-6 group-hover:invisible group-focus-visible:invisible"
+                      />
+                      <span class="invisible col-start-1 row-start-1 text-xs font-semibold group-hover:visible group-focus-visible:visible">
+                        Remove?
+                      </span>
+                    </span>
+                  </template>
+                </button>
               </div>
             </UCard>
           </li>
@@ -560,29 +602,22 @@ async function loadMore() {
             class="sm:col-span-2 lg:col-span-1 lg:col-start-2"
           >
             <UCard
-              class="bg-success text-white ring-success transition hover:bg-success/90 dark:text-slate-950"
+              as="button"
+              type="button"
+              class="w-full rounded-full bg-success text-left text-white ring-success transition hover:bg-success/90 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-success disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-950"
+              :disabled="searching && !loadingMore"
               :ui="{ body: 'p-3 sm:p-4' }"
+              @click="loadMore"
             >
               <div class="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  class="min-w-0 truncate text-left text-base font-semibold tracking-wide whitespace-nowrap text-white sm:text-lg dark:text-slate-950"
-                  :disabled="searching && !loadingMore"
-                  @click="loadMore"
-                >
+                <span class="min-w-0 truncate text-base font-semibold tracking-wide whitespace-nowrap sm:text-lg">
                   {{ loadingMore ? 'Loading…' : 'Load more' }}
                   <span class="text-sm font-medium text-white/80 dark:text-slate-950/80">· {{ remainingLabel }}</span>
-                </button>
-                <UButton
-                  :icon="loadingMore ? undefined : 'i-lucide-chevron-down'"
-                  color="success"
-                  variant="solid"
-                  class="shrink-0"
-                  :ui="{ leadingIcon: loadingMore ? '' : 'animate-bounce motion-reduce:animate-none' }"
-                  :loading="loadingMore"
-                  :disabled="searching && !loadingMore"
-                  aria-label="Load more"
-                  @click="loadMore"
+                </span>
+                <UIcon
+                  :name="loadingMore ? 'i-lucide-loader-circle' : 'i-lucide-chevron-down'"
+                  class="size-5 shrink-0"
+                  :class="loadingMore ? 'animate-spin' : 'animate-bounce motion-reduce:animate-none'"
                 />
               </div>
             </UCard>

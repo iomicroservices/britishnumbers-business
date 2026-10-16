@@ -186,8 +186,8 @@ const patterns = [
           </template>
         </UPageCard>
         <UPageCard
-          title="Multi-search"
-          description="Pick Multi-search in the menu. Starts, Contains, and Ends are separate boxes, so you never have to type a comma."
+          title="Multi-part"
+          description="Pick Multi-part in the menu. Starts, Contains, and Ends are separate boxes, so you never have to type a comma."
           icon="i-lucide-text-cursor-input"
           spotlight
           class="sm:col-span-2 lg:col-span-3"
@@ -268,7 +268,7 @@ const patterns = [
 
     <UPageCTA
       title="Ready to look?"
-      description="Start with a few digits, or open Multi-search and fill in the start, middle, and end separately."
+      description="Start with a few digits, or open Multi-part and fill in the start, middle, and end separately."
       variant="subtle"
       :links="[{
         label: 'Search numbers',

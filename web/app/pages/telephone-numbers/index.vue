@@ -30,6 +30,7 @@ const {
 const route = useRoute()
 const router = useRouter()
 const { withSearch } = useTelephoneSearchQuery()
+const { isWide } = useWideLayout()
 const initialSearch = readTelephoneSearch(route.query)
 const kind = ref<NumberKind>(initialSearch.kind)
 const areaCode = ref(initialSearch.area)
@@ -37,8 +38,13 @@ const grade = ref<LandlineGrade>(initialSearch.grade)
 const hasLoaded = ref(false)
 const loadingMore = ref(false)
 const filtersOpen = ref(false)
+const filterSection = ref<HTMLElement | null>(null)
+useDismissFilters(filtersOpen, filterSection)
 const planOpen = ref(false)
 const planPickerOpen = ref(false)
+watch(filtersOpen, (value) => {
+  if (!value) planPickerOpen.value = false
+})
 const previewPlan = ref<LandlinePlanId | null>(initialSearch.plan)
 const selected = ref<LandlineNumber | null>(null)
 const plan = ref<LandlinePlanId>('3')
@@ -55,7 +61,7 @@ const kindOptions = [
 ]
 
 const gradeOptions = [
-  { label: 'All collections', value: 'All' },
+  { label: 'All', value: 'All' },
   { label: 'Bronze', value: 'Bronze' },
   { label: 'Silver', value: 'Silver' },
   { label: 'Gold', value: 'Gold' },
@@ -76,7 +82,7 @@ const areaItems = computed(() => {
 
 const isLocal = computed(() => kind.value === '0102')
 const kindLabel = computed(() => kindOptions.find(option => option.value === kind.value)?.label ?? 'Local')
-const gradeLabel = computed(() => gradeOptions.find(option => option.value === grade.value)?.label ?? 'All collections')
+const gradeLabel = computed(() => gradeOptions.find(option => option.value === grade.value)?.label ?? 'All')
 const heroTitle = computed(() => `Pick your ${kindLabel.value.toLowerCase()} number`)
 const heroCopy = computed(() => {
   if (kind.value === '0800') return 'Increase customer enquiries with a number that\'s free to call.'
@@ -142,6 +148,11 @@ const previewChoice = computed(() => LANDLINE_PLANS.find(option => option.id ===
 const previewLabel = computed(() => {
   if (!previewChoice.value) return 'Choose plan'
   return `${planShortName(previewChoice.value.id)} · £${previewChoice.value.monthly}/month`
+})
+const filterSummary = computed(() => {
+  const parts = [kindLabel.value, activeArea.value, gradeLabel.value]
+  if (previewChoice.value) parts.push(planShortName(previewChoice.value.id))
+  return parts.join(' · ')
 })
 
 function connectionFeeLine(price: number) {
@@ -295,132 +306,141 @@ onMounted(() => {
 
 <template>
   <div>
-    <div
-      class="sticky top-(--ui-header-height) z-40 border-b border-default bg-default/75 backdrop-blur-sm"
-    >
-      <UContainer class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
-      <div class="flex items-center justify-between gap-3 sm:contents">
-        <UTooltip class="shrink-0 sm:order-1">
-          <UButton
-            icon="i-lucide-info"
-            color="info"
-            variant="soft"
-            size="lg"
-            square
-            aria-label="Number types"
-          />
-          <template #content>
-            Local numbers use an area code. National numbers are 0333. Freephone numbers are 0800.
-          </template>
-        </UTooltip>
-        <UButton
-          type="button"
-          icon="i-lucide-rotate-ccw"
-          color="error"
-          variant="soft"
-          size="lg"
-          class="sm:order-6"
-          @click="resetFilters"
+    <div class="sticky top-(--ui-header-height) z-40 border-b border-default bg-default/75 backdrop-blur-sm lg:hidden">
+      <UContainer class="py-3">
+        <Teleport
+          to="#shop-search-slot"
+          :disabled="!isWide"
         >
-          Reset
-        </UButton>
-      </div>
-
-      <UButton
-        type="button"
-        color="neutral"
-        variant="outline"
-        size="lg"
-        icon="i-lucide-sliders-horizontal"
-        :trailing-icon="filtersOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
-        class="justify-between sm:hidden"
-        :aria-expanded="filtersOpen"
-        @click="filtersOpen = !filtersOpen"
-      >
-        {{ kindLabel }} · {{ gradeLabel }}
-      </UButton>
-
-      <UPopover
-        v-model:open="planPickerOpen"
-        class="w-full sm:order-5 sm:w-auto"
-        :content="{ align: 'start', collisionPadding: 16, sideOffset: 8 }"
-        :ui="{ content: 'max-w-[calc(100vw-2rem)]' }"
-      >
-        <UButton
-          color="neutral"
-          variant="outline"
-          size="lg"
-          trailing
-          trailing-icon="i-lucide-chevron-down"
-          class="relative w-full justify-start text-left sm:w-56"
-          :ui="{
-            base: 'px-3 py-2 pe-10 text-base/5 font-normal text-highlighted md:text-sm',
-            trailingIcon: `${planPickerOpen ? 'rotate-180' : ''} pointer-events-none absolute end-3 top-1/2 size-5 -translate-y-1/2 text-dimmed transition-transform`
-          }"
-          :aria-expanded="planPickerOpen"
-        >
-          <span class="truncate">{{ previewLabel }}</span>
-        </UButton>
-        <template #content>
-          <div class="flex w-[min(20rem,calc(100vw-2rem))] flex-col text-left">
-            <div class="flex max-h-[min(24rem,calc(100dvh-8rem))] flex-col gap-2 overflow-y-auto p-3">
-              <button
-                v-for="option in LANDLINE_PLANS"
-                :key="option.id"
-                type="button"
-                class="rounded-md border px-3 py-3 text-left transition"
-                :class="previewPlan === option.id ? 'border-primary bg-primary/10' : 'border-default hover:bg-elevated'"
-                @click="choosePreview(option.id)"
-              >
-                <span class="block text-left font-medium text-highlighted">{{ option.name }}</span>
-                <span class="mt-0.5 block text-left text-sm text-muted">£{{ option.monthly }}/month</span>
-                <span class="mt-2 block text-left text-sm text-muted">{{ planForwarding(option.id).replace(' to your landline or mobile number', '') }}</span>
-              </button>
-            </div>
-            <div class="border-t border-default p-3">
+          <div class="flex w-full min-w-0 flex-col gap-3 lg:flex-row lg:items-center lg:justify-center lg:gap-2">
+            <div
+              ref="filterSection"
+              class="contents"
+            >
+            <div class="flex items-center gap-2 lg:contents">
               <UButton
-                :to="withSearch('/telephone-numbers/pricing')"
+                type="button"
                 color="neutral"
-                variant="ghost"
-                block
-                trailing-icon="i-lucide-arrow-right"
+                variant="outline"
+                :size="isWide ? 'md' : 'lg'"
+                icon="i-lucide-sliders-horizontal"
+                :trailing-icon="filtersOpen ? 'i-lucide-chevron-up' : 'i-lucide-chevron-down'"
+                class="min-w-0 flex-1 justify-between lg:hidden"
+                :aria-expanded="filtersOpen"
+                @click="filtersOpen = !filtersOpen"
               >
-                Pricing details
+                <span class="truncate">{{ filterSummary }}</span>
               </UButton>
+              <UButton
+                type="button"
+                icon="i-lucide-rotate-ccw"
+                color="error"
+                variant="soft"
+                :size="isWide ? 'md' : 'lg'"
+                square
+                aria-label="Reset"
+                class="shrink-0 lg:order-6"
+                @click="resetFilters"
+              />
+            </div>
+
+            <div
+              class="flex-col gap-3 overflow-anchor-none lg:contents"
+              :class="filtersOpen ? 'flex' : 'hidden'"
+            >
+              <USelect
+                v-model="kind"
+                :items="kindOptions"
+                :size="isWide ? 'md' : 'lg'"
+                class="w-full lg:order-2 lg:w-36"
+                aria-label="Number type"
+              />
+              <USelectMenu
+                v-if="isLocal"
+                v-model="areaCode"
+                :items="areaItems"
+                value-key="value"
+                :size="isWide ? 'md' : 'lg'"
+                class="w-full lg:order-3 lg:w-52"
+                aria-label="Area code"
+              />
+              <USelect
+                v-model="grade"
+                :items="gradeOptions"
+                :size="isWide ? 'md' : 'lg'"
+                class="w-full lg:order-4 lg:w-40"
+                aria-label="Collection"
+              />
+              <UPopover
+                v-model:open="planPickerOpen"
+                class="w-full lg:order-5 lg:w-auto"
+                :content="{ align: 'start', collisionPadding: 16, sideOffset: 8 }"
+                :ui="{ content: 'max-w-[calc(100vw-2rem)]' }"
+              >
+                <UButton
+                  color="neutral"
+                  variant="outline"
+                  :size="isWide ? 'md' : 'lg'"
+                  trailing
+                  trailing-icon="i-lucide-chevron-down"
+                  class="relative w-full justify-start text-left lg:w-48"
+                  :ui="{
+                    base: 'px-3 py-2 pe-10 text-base/5 font-normal text-highlighted md:text-sm',
+                    trailingIcon: `${planPickerOpen ? 'rotate-180' : ''} pointer-events-none absolute end-3 top-1/2 size-5 -translate-y-1/2 text-dimmed transition-transform`
+                  }"
+                  :aria-expanded="planPickerOpen"
+                >
+                  <span class="truncate">{{ previewLabel }}</span>
+                </UButton>
+                <template #content>
+                  <div class="flex w-[min(20rem,calc(100vw-2rem))] flex-col text-left">
+                    <div class="flex max-h-[min(24rem,calc(100dvh-8rem))] flex-col gap-2 overflow-y-auto p-3">
+                      <button
+                        v-for="option in LANDLINE_PLANS"
+                        :key="option.id"
+                        type="button"
+                        class="rounded-md border px-3 py-3 text-left transition"
+                        :class="previewPlan === option.id ? 'border-primary bg-primary/10' : 'border-default hover:bg-elevated'"
+                        @click="choosePreview(option.id)"
+                      >
+                        <span class="block text-left font-medium text-highlighted">{{ option.name }}</span>
+                        <span class="mt-0.5 block text-left text-sm text-muted">£{{ option.monthly }}/month</span>
+                        <span class="mt-2 block text-left text-sm text-muted">{{ planForwarding(option.id).replace(' to your landline or mobile number', '') }}</span>
+                      </button>
+                    </div>
+                    <div class="border-t border-default p-3">
+                      <UButton
+                        :to="withSearch('/telephone-numbers/pricing')"
+                        color="info"
+                        block
+                        trailing-icon="i-lucide-arrow-right"
+                      >
+                        Pricing details
+                      </UButton>
+                    </div>
+                  </div>
+                </template>
+              </UPopover>
+              <UTooltip class="lg:order-1 lg:shrink-0">
+                <UButton
+                  icon="i-lucide-info"
+                  color="info"
+                  variant="soft"
+                  :size="isWide ? 'md' : 'lg'"
+                  :square="isWide"
+                  class="w-full justify-start lg:w-auto"
+                  aria-label="Number types"
+                >
+                  <span class="lg:hidden">Number types</span>
+                </UButton>
+                <template #content>
+                  Local numbers use an area code. National numbers are 0333. Freephone numbers are 0800.
+                </template>
+              </UTooltip>
+            </div>
             </div>
           </div>
-        </template>
-      </UPopover>
-
-      <div
-        class="flex-col gap-3 sm:contents"
-        :class="filtersOpen ? 'flex' : 'hidden sm:contents'"
-      >
-        <USelect
-          v-model="kind"
-          :items="kindOptions"
-          size="lg"
-          class="w-full sm:order-2 sm:w-40"
-          aria-label="Number type"
-        />
-        <USelectMenu
-          v-if="isLocal"
-          v-model="areaCode"
-          :items="areaItems"
-          value-key="value"
-          size="lg"
-          class="w-full sm:order-3 sm:w-64"
-          aria-label="Area code"
-        />
-        <USelect
-          v-model="grade"
-          :items="gradeOptions"
-          size="lg"
-          class="w-full sm:order-4 sm:w-44"
-          aria-label="Collection"
-        />
-      </div>
-
+        </Teleport>
       </UContainer>
     </div>
 
@@ -494,49 +514,51 @@ onMounted(() => {
             :class="searching && !loadingMore ? 'pointer-events-none opacity-60' : ''"
           >
             <UCard
-              class="transition-colors duration-300"
-              :class="inBasket(item.number) ? 'bg-info/10 ring-info/25' : 'bg-elevated'"
-              :ui="{ body: 'p-3 sm:p-4' }"
+              class="bg-elevated"
+              :ui="{ root: 'ring-0', body: 'p-0 sm:p-0' }"
             >
-              <div class="flex items-center justify-between gap-3">
-                <div class="min-w-0">
-                  <p class="truncate text-base font-semibold tabular-nums tracking-wide whitespace-nowrap text-highlighted sm:text-lg">
+              <div class="flex items-stretch">
+                <div class="flex min-w-0 flex-1 flex-col justify-center border-y border-s border-default px-3 py-3 sm:px-4">
+                  <p class="truncate text-xl font-semibold tabular-nums tracking-wide text-highlighted sm:text-lg xl:text-xl">
                     {{ formatLandline(item.number, activeArea) }}
                     <span
                       v-if="previewChoice"
-                      class="text-sm font-medium text-muted"
+                      class="text-base font-medium text-muted sm:text-sm xl:text-base"
                     >· £{{ previewChoice.monthly }}/month</span>
                   </p>
-                  <p class="truncate text-sm text-muted">
+                  <p class="truncate text-base text-muted sm:text-sm xl:text-base">
                     {{ connectionFeeLine(item.price) }}
                   </p>
                 </div>
-                <div class="relative shrink-0">
-                  <UButton
-                    icon="i-lucide-plus"
-                    color="primary"
-                    variant="solid"
-                    aria-label="Choose a plan"
-                    :tabindex="inBasket(item.number) ? -1 : 0"
-                    :aria-hidden="inBasket(item.number)"
-                    class="transition-opacity duration-300"
-                    :class="inBasket(item.number) ? 'pointer-events-none opacity-0' : 'opacity-100'"
-                    :disabled="!inBasket(item.number) && (basketBusy || !ready)"
-                    @click="openPlan(item)"
+                <button
+                  type="button"
+                  class="group flex w-16 shrink-0 items-center justify-center border transition-colors duration-300 focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-current disabled:cursor-not-allowed disabled:opacity-60"
+                  :class="inBasket(item.number) ? 'border-success/10 bg-success/10 text-success lg:hover:border-error/10 lg:hover:bg-error/10 lg:hover:text-error lg:focus-visible:border-error/10 lg:focus-visible:bg-error/10 lg:focus-visible:text-error' : 'border-primary/10 bg-primary/10 text-primary hover:border-primary/15 hover:bg-primary/15'"
+                  :aria-label="inBasket(item.number) ? 'Remove from basket' : 'Choose a plan'"
+                  :disabled="basketBusy || !ready"
+                  @click="inBasket(item.number) ? removeBasketNumber(item.number) : openPlan(item)"
+                >
+                  <UIcon
+                    v-if="!inBasket(item.number)"
+                    name="i-lucide-plus"
+                    class="size-6"
                   />
-                  <UButton
-                    icon="i-lucide-minus"
-                    color="error"
-                    variant="soft"
-                    aria-label="Remove from basket"
-                    :tabindex="inBasket(item.number) ? 0 : -1"
-                    :aria-hidden="!inBasket(item.number)"
-                    class="absolute inset-0 transition-opacity duration-300"
-                    :class="inBasket(item.number) ? 'opacity-100' : 'pointer-events-none opacity-0'"
-                    :disabled="inBasket(item.number) && (basketBusy || !ready)"
-                    @click="removeBasketNumber(item.number)"
-                  />
-                </div>
+                  <template v-else>
+                    <UIcon
+                      name="i-lucide-x"
+                      class="size-5 lg:hidden"
+                    />
+                    <span class="hidden w-full place-items-center lg:inline-grid">
+                      <UIcon
+                        name="i-lucide-check"
+                        class="col-start-1 row-start-1 size-6 group-hover:invisible group-focus-visible:invisible"
+                      />
+                      <span class="invisible col-start-1 row-start-1 text-xs font-semibold group-hover:visible group-focus-visible:visible">
+                        Remove?
+                      </span>
+                    </span>
+                  </template>
+                </button>
               </div>
             </UCard>
           </li>
@@ -545,29 +567,22 @@ onMounted(() => {
             class="sm:col-span-2 lg:col-span-1 lg:col-start-2"
           >
             <UCard
-              class="bg-success text-white ring-success transition hover:bg-success/90 dark:text-slate-950"
+              as="button"
+              type="button"
+              class="w-full rounded-full bg-success text-left text-white ring-success transition hover:bg-success/90 focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-success disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-950"
+              :disabled="searching && !loadingMore"
               :ui="{ body: 'p-3 sm:p-4' }"
+              @click="loadMore"
             >
               <div class="flex items-center justify-between gap-3">
-                <button
-                  type="button"
-                  class="min-w-0 truncate text-left text-base font-semibold tracking-wide whitespace-nowrap text-white sm:text-lg dark:text-slate-950"
-                  :disabled="searching && !loadingMore"
-                  @click="loadMore"
-                >
+                <span class="min-w-0 truncate text-base font-semibold tracking-wide whitespace-nowrap sm:text-lg">
                   {{ loadingMore ? 'Loading…' : 'Load more' }}
                   <span class="text-sm font-medium text-white/80 dark:text-slate-950/80">· {{ remainingLabel }}</span>
-                </button>
-                <UButton
-                  :icon="loadingMore ? undefined : 'i-lucide-chevron-down'"
-                  color="success"
-                  variant="solid"
-                  class="shrink-0"
-                  :ui="{ leadingIcon: loadingMore ? '' : 'animate-bounce motion-reduce:animate-none' }"
-                  :loading="loadingMore"
-                  :disabled="searching && !loadingMore"
-                  aria-label="Load more"
-                  @click="loadMore"
+                </span>
+                <UIcon
+                  :name="loadingMore ? 'i-lucide-loader-circle' : 'i-lucide-chevron-down'"
+                  class="size-5 shrink-0"
+                  :class="loadingMore ? 'animate-spin' : 'animate-bounce motion-reduce:animate-none'"
                 />
               </div>
             </UCard>

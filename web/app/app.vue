@@ -31,12 +31,21 @@ const nav = computed(() => [
 const route = useRoute()
 const basketOpen = useState('mobile-basket-open', () => false)
 const basketStep = useState<'items' | 'details'>('mobile-basket-step', () => 'items')
+const landlineOpen = useState('landline-basket-open', () => false)
+const landlineStep = useState<'items' | 'details'>('landline-basket-step', () => 'items')
 const { basket } = useMobileShop()
+const { basket: landlineBasket } = useLandlineShop()
 const onMobilePage = computed(() => route.path === '/mobile-numbers' || route.path.startsWith('/mobile-numbers/'))
+const onTelephonePage = computed(() => route.path === '/telephone-numbers' || route.path.startsWith('/telephone-numbers/'))
 
 function openBasket() {
   basketStep.value = 'items'
   basketOpen.value = true
+}
+
+function openLandlineBasket() {
+  landlineStep.value = 'items'
+  landlineOpen.value = true
 }
 </script>
 
@@ -70,12 +79,23 @@ function openBasket() {
           Basket
           <span class="ms-1 text-xs text-muted">{{ basket.length }}</span>
         </UButton>
+        <UButton
+          v-if="onTelephonePage"
+          color="neutral"
+          variant="ghost"
+          icon="i-lucide-shopping-bag"
+          @click="openLandlineBasket"
+        >
+          Basket
+          <span class="ms-1 text-xs text-muted">{{ landlineBasket.length }}</span>
+        </UButton>
         <UColorModeButton />
       </template>
     </UHeader>
 
     <ClientOnly>
       <MobileBasketDrawer v-if="onMobilePage" />
+      <TelephoneBasketDrawer v-if="onTelephonePage" />
     </ClientOnly>
 
     <UMain>

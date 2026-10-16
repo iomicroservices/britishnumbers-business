@@ -45,9 +45,6 @@ export interface CheckoutDetails {
 export const MOBILE_PAGE_SIZE = 90
 
 const SESSION_KEY = 'bn-mobile-session'
-const BASKET = 'f307c3b2-c35c-4fda-8eeb-8519409853ea'
-const LEADS = '8dc4beaa-819b-48b0-95ed-6a6d92e9156b'
-const COMPANIES = '454772e5-f61a-421e-854c-0ef92be1df3e'
 
 function errorMessage(error: unknown) {
   const err = error as {
@@ -91,15 +88,14 @@ export function useMobileShop() {
     error.value = ''
     const stored = import.meta.client ? localStorage.getItem(SESSION_KEY) : ''
     try {
-      const response = await $fetch<{ data?: { id?: string } }>('/ww/session/ensure', {
+      const response = await $fetch<{ id?: string }>('/api/session', {
         method: 'POST',
         body: {
           sessionId: stored || undefined,
-          type: 'mobile',
-          is_auth: false
+          type: 'mobile'
         }
       })
-      const id = response.data?.id || ''
+      const id = response.id || ''
       if (!id) throw new Error('No session returned')
       sessionId.value = id
       if (import.meta.client) localStorage.setItem(SESSION_KEY, id)
@@ -113,10 +109,9 @@ export function useMobileShop() {
 
   async function loadBasket() {
     if (!sessionId.value) return
-    const response = await $fetch<{ data?: BasketItem[] }>(
-      `/ww/cms_data_sets/${BASKET}/fetch?sessionId=${encodeURIComponent(sessionId.value)}`,
-      { method: 'POST', body: {} }
-    )
+    const response = await $fetch<{ data?: BasketItem[] }>('/api/basket', {
+      query: { sessionId: sessionId.value }
+    })
     basket.value = (response.data || []).map(item => ({
       id: item.id,
       number: String(item.number || ''),
@@ -189,19 +184,16 @@ export function useMobileShop() {
     basketBusy.value = true
     error.value = ''
     try {
-      await $fetch(`/ww/cms_data_sets/${BASKET}/airtable/record`, {
+      await $fetch('/api/basket', {
         method: 'POST',
         body: {
-          data: {
-            mrc: 0,
-            price: item.price,
-            number: item.number,
-            tariff: '',
-            include: true,
-            session_id: [sessionId.value],
-            destination: '',
-            number_type: '07'
-          }
+          sessionId: sessionId.value,
+          mrc: 0,
+          price: item.price,
+          number: item.number,
+          tariff: '',
+          destination: '',
+          number_type: '07'
         }
       })
       await loadBasket()
@@ -216,7 +208,10 @@ export function useMobileShop() {
     basketBusy.value = true
     error.value = ''
     try {
-      await $fetch(`/ww/cms_data_sets/${BASKET}/airtable/record/${id}`, { method: 'DELETE' })
+      await $fetch(`/api/basket/${id}`, {
+        method: 'DELETE',
+        query: { sessionId: sessionId.value }
+      })
       basket.value = basket.value.filter(item => item.id !== id)
     } catch (err) {
       error.value = errorMessage(err)
@@ -248,15 +243,13 @@ export function useMobileShop() {
 
   async function saveCompany(hit: CompanyHit) {
     if (!sessionId.value) return
-    await $fetch(`/ww/cms_data_sets/${COMPANIES}/airtable/record`, {
+    await $fetch('/api/company', {
       method: 'POST',
       body: {
-        data: {
-          name: hit.title,
-          address: hit.address_snippet,
-          registration: hit.company_number,
-          session_id: [sessionId.value]
-        }
+        sessionId: sessionId.value,
+        name: hit.title,
+        address: hit.address_snippet,
+        registration: hit.company_number
       }
     })
   }
@@ -271,30 +264,28 @@ export function useMobileShop() {
         number: item.number,
         price: item.price
       }))
-      await $fetch(`/ww/cms_data_sets/${LEADS}/airtable/record`, {
+      await $fetch('/api/lead', {
         method: 'POST',
         body: {
-          data: {
-            city: details.city,
-            name: `${details.firstName} ${details.lastName}`.trim(),
-            news: details.news,
-            type: 'mobile',
-            email: details.email,
-            total: total.value,
-            source: import.meta.client ? window.location.href : '',
-            address: details.address,
-            session: [sessionId.value],
-            lastName: details.lastName,
-            metadata: JSON.stringify({ quantity: products.length }),
-            postCode: details.postCode,
-            products: JSON.stringify(products),
-            firstName: details.firstName,
-            conditions: details.conditions,
-            businessReg: details.businessReg,
-            businessName: details.businessName,
-            businessType: details.businessType,
-            contactNumber: details.contactNumber
-          }
+          sessionId: sessionId.value,
+          city: details.city,
+          name: `${details.firstName} ${details.lastName}`.trim(),
+          news: details.news,
+          type: 'mobile',
+          email: details.email,
+          total: total.value,
+          source: import.meta.client ? window.location.href : '',
+          address: details.address,
+          lastName: details.lastName,
+          metadata: JSON.stringify({ quantity: products.length }),
+          postCode: details.postCode,
+          products: JSON.stringify(products),
+          firstName: details.firstName,
+          conditions: details.conditions,
+          businessReg: details.businessReg,
+          businessName: details.businessName,
+          businessType: details.businessType,
+          contactNumber: details.contactNumber
         }
       })
 

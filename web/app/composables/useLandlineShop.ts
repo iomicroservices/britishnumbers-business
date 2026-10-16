@@ -87,9 +87,6 @@ const GRADE_BANDS: Record<Exclude<LandlineGrade, 'All'>, [number, number]> = {
 }
 
 const SESSION_KEY = 'bn-landline-session'
-const BASKET = 'f307c3b2-c35c-4fda-8eeb-8519409853ea'
-const LEADS = '8dc4beaa-819b-48b0-95ed-6a6d92e9156b'
-const COMPANIES = '454772e5-f61a-421e-854c-0ef92be1df3e'
 
 export function connectionLabel(price: number) {
   const amount = Number(price) || 0
@@ -191,15 +188,14 @@ export function useLandlineShop() {
     error.value = ''
     const stored = import.meta.client ? localStorage.getItem(SESSION_KEY) : ''
     try {
-      const response = await $fetch<{ data?: { id?: string } }>('/ww/session/ensure', {
+      const response = await $fetch<{ id?: string }>('/api/session', {
         method: 'POST',
         body: {
           sessionId: stored || undefined,
-          type: 'landline',
-          is_auth: false
+          type: 'landline'
         }
       })
-      const id = response.data?.id || ''
+      const id = response.id || ''
       if (!id) throw new Error('No session returned')
       sessionId.value = id
       if (import.meta.client) localStorage.setItem(SESSION_KEY, id)
@@ -223,10 +219,9 @@ export function useLandlineShop() {
 
   async function loadBasket() {
     if (!sessionId.value) return
-    const response = await $fetch<{ data?: Record<string, unknown>[] }>(
-      `/ww/cms_data_sets/${BASKET}/fetch?sessionId=${encodeURIComponent(sessionId.value)}`,
-      { method: 'POST', body: {} }
-    )
+    const response = await $fetch<{ data?: Record<string, unknown>[] }>('/api/basket', {
+      query: { sessionId: sessionId.value }
+    })
     basket.value = (response.data || []).map(item => ({
       id: String(item.id || ''),
       number: String(item.number || ''),
@@ -312,22 +307,19 @@ export function useLandlineShop() {
     basketBusy.value = true
     error.value = ''
     try {
-      await $fetch(`/ww/cms_data_sets/${BASKET}/airtable/record`, {
+      await $fetch('/api/basket', {
         method: 'POST',
         body: {
-          data: {
-            mrc: plan.monthly,
-            price: item.price,
-            number: item.number,
-            tariff: plan.name,
-            include: true,
-            session_id: [sessionId.value],
-            destination: item.destination,
-            number_type: item.numberType,
-            switchboard: item.switchboard,
-            team_divert: item.team,
-            call_whisper: item.whisper
-          }
+          sessionId: sessionId.value,
+          mrc: plan.monthly,
+          price: item.price,
+          number: item.number,
+          tariff: plan.name,
+          destination: item.destination,
+          number_type: item.numberType,
+          switchboard: item.switchboard,
+          team_divert: item.team,
+          call_whisper: item.whisper
         }
       })
       await loadBasket()
@@ -342,7 +334,10 @@ export function useLandlineShop() {
     basketBusy.value = true
     error.value = ''
     try {
-      await $fetch(`/ww/cms_data_sets/${BASKET}/airtable/record/${id}`, { method: 'DELETE' })
+      await $fetch(`/api/basket/${id}`, {
+        method: 'DELETE',
+        query: { sessionId: sessionId.value }
+      })
       basket.value = basket.value.filter(item => item.id !== id)
     } catch (err) {
       error.value = errorMessage(err)
@@ -374,15 +369,13 @@ export function useLandlineShop() {
 
   async function saveCompany(hit: CompanyHit) {
     if (!sessionId.value) return
-    await $fetch(`/ww/cms_data_sets/${COMPANIES}/airtable/record`, {
+    await $fetch('/api/company', {
       method: 'POST',
       body: {
-        data: {
-          name: hit.title,
-          address: hit.address_snippet,
-          registration: hit.company_number,
-          session_id: [sessionId.value]
-        }
+        sessionId: sessionId.value,
+        name: hit.title,
+        address: hit.address_snippet,
+        registration: hit.company_number
       }
     })
   }
@@ -403,37 +396,35 @@ export function useLandlineShop() {
       const payg = basket.value.filter(item => item.tariff === 'PAYG Plan').length
       const individual = basket.value.filter(item => item.tariff === 'Individual Plan').length
       const business = basket.value.filter(item => item.tariff === 'Business Plan').length
-      await $fetch(`/ww/cms_data_sets/${LEADS}/airtable/record`, {
+      await $fetch('/api/lead', {
         method: 'POST',
         body: {
-          data: {
-            city: details.city,
-            name: `${details.firstName} ${details.lastName}`.trim(),
-            news: details.news,
-            type: 'landline',
-            email: details.email,
-            total: total.value,
-            source: import.meta.client ? window.location.href : '',
-            address: details.address,
-            session: [sessionId.value],
-            lastName: details.lastName,
-            metadata: JSON.stringify({
-              payg_quant: payg,
-              individual_quant: individual,
-              business_quant: business,
-              switchboard_quant: basket.value.filter(item => item.switchboard).length - business,
-              team_quant: basket.value.filter(item => item.team).length - business,
-              whisper_quant: basket.value.filter(item => item.whisper).length - (business + individual)
-            }),
-            postCode: details.postCode,
-            products: JSON.stringify(products),
-            firstName: details.firstName,
-            conditions: details.conditions,
-            businessReg: details.businessReg,
-            businessName: details.businessName,
-            businessType: details.businessType,
-            contactNumber: details.contactNumber
-          }
+          sessionId: sessionId.value,
+          city: details.city,
+          name: `${details.firstName} ${details.lastName}`.trim(),
+          news: details.news,
+          type: 'landline',
+          email: details.email,
+          total: total.value,
+          source: import.meta.client ? window.location.href : '',
+          address: details.address,
+          lastName: details.lastName,
+          metadata: JSON.stringify({
+            payg_quant: payg,
+            individual_quant: individual,
+            business_quant: business,
+            switchboard_quant: basket.value.filter(item => item.switchboard).length - business,
+            team_quant: basket.value.filter(item => item.team).length - business,
+            whisper_quant: basket.value.filter(item => item.whisper).length - (business + individual)
+          }),
+          postCode: details.postCode,
+          products: JSON.stringify(products),
+          firstName: details.firstName,
+          conditions: details.conditions,
+          businessReg: details.businessReg,
+          businessName: details.businessName,
+          businessType: details.businessType,
+          contactNumber: details.contactNumber
         }
       })
 

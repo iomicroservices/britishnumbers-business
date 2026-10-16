@@ -22,9 +22,10 @@ useSeoMeta({
 })
 
 const { shopLink } = useMobileSearchQuery()
+const { shopLink: telephoneLink } = useTelephoneSearchQuery()
 const nav = computed(() => [
   { label: 'Home', to: '/' },
-  { label: 'Telephone', to: '/telephone-numbers' },
+  { label: 'Telephone', to: telephoneLink.value },
   { label: 'Mobile', to: shopLink.value }
 ])
 

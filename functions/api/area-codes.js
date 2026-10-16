@@ -17,9 +17,18 @@ function getSupabase(env) {
     return { url: url.replace(/\/$/, ''), key };
 }
 
-async function handleAreaCodes(env) {
-    const { url, key } = getSupabase(env);
-    const upstream = new URL(`${url}/rest/v1/areacodes`);
+const PAGE_SIZE = 100;
+
+function mapRows(body) {
+    return (Array.isArray(body) ? body : []).map(row => ({
+        name: String(row.name || row.code || ''),
+        code: String(row.code || ''),
+        featured: Boolean(row.featured),
+    })).filter(row => row.code);
+}
+
+async function fetchAreaPage(baseUrl, key, from) {
+    const upstream = new URL(`${baseUrl}/rest/v1/areacodes`);
     upstream.searchParams.set('select', 'name,code,featured');
     upstream.searchParams.set('order', 'name.asc');
 
@@ -28,7 +37,8 @@ async function handleAreaCodes(env) {
             apikey: key,
             Authorization: `Bearer ${key}`,
             Accept: 'application/json',
-            Range: '0-999',
+            Range: `${from}-${from + PAGE_SIZE - 1}`,
+            Prefer: 'count=exact',
         },
     });
 
@@ -42,16 +52,34 @@ async function handleAreaCodes(env) {
 
     if (!response.ok) {
         const message = body?.message || body?.error || text || `Area code request failed (${response.status})`;
-        return json({ error: message }, response.status);
+        const error = new Error(typeof message === 'string' ? message : 'Area code request failed');
+        error.status = response.status;
+        throw error;
     }
 
-    const rows = (Array.isArray(body) ? body : []).map(row => ({
-        name: String(row.name || row.code || ''),
-        code: String(row.code || ''),
-        featured: Boolean(row.featured),
-    })).filter(row => row.code);
+    const range = response.headers.get('content-range') || '';
+    const total = range.includes('/') ? Number(range.split('/')[1]) : null;
+    return {
+        rows: mapRows(body),
+        total: Number.isFinite(total) ? total : null,
+    };
+}
 
-    return json(rows);
+async function handleAreaCodes(env) {
+    const { url, key } = getSupabase(env);
+    const rows = [];
+    let from = 0;
+    let total = null;
+
+    while (from < 5000) {
+        const page = await fetchAreaPage(url, key, from);
+        rows.push(...page.rows);
+        total = page.total;
+        if (!page.rows.length || page.rows.length < PAGE_SIZE || (total != null && from + PAGE_SIZE >= total)) break;
+        from += PAGE_SIZE;
+    }
+
+    return json(rows.filter(row => row.code !== '0207'));
 }
 
 export async function onRequestGet(context) {

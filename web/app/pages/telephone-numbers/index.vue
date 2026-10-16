@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { LandlineGrade, LandlineNumber, LandlinePlanId, NumberKind } from '../composables/useLandlineShop'
-import { connectionLabel, formatLandline, LANDLINE_PLANS } from '../composables/useLandlineShop'
+import type { LandlineGrade, LandlineNumber, LandlinePlanId, NumberKind } from '../../composables/useLandlineShop'
+import { connectionLabel, formatLandline, LANDLINE_PLANS } from '../../composables/useLandlineShop'
+import { readTelephoneSearch, sameTelephoneSearch, telephoneSearchQuery } from '../../composables/useTelephoneSearchQuery'
 
 useSeoMeta({
   title: 'Telephone numbers · British Numbers',
@@ -26,15 +27,19 @@ const {
   removeFromBasket
 } = useLandlineShop()
 
-const kind = ref<NumberKind>('0333')
-const areaCode = ref('0208')
-const grade = ref<LandlineGrade>('All')
+const route = useRoute()
+const router = useRouter()
+const { withSearch } = useTelephoneSearchQuery()
+const initialSearch = readTelephoneSearch(route.query)
+const kind = ref<NumberKind>(initialSearch.kind)
+const areaCode = ref(initialSearch.area)
+const grade = ref<LandlineGrade>(initialSearch.grade)
 const hasLoaded = ref(false)
 const loadingMore = ref(false)
 const filtersOpen = ref(false)
 const planOpen = ref(false)
 const planPickerOpen = ref(false)
-const previewPlan = ref<LandlinePlanId | null>(null)
+const previewPlan = ref<LandlinePlanId | null>(initialSearch.plan)
 const selected = ref<LandlineNumber | null>(null)
 const plan = ref<LandlinePlanId>('3')
 const destination = ref('')
@@ -64,7 +69,7 @@ const areaItems = computed(() => {
   if (!rows.some(row => row.code === '0208')) rows.push({ name: 'London', code: '0208', featured: true })
   rows.sort((a, b) => Number(b.featured) - Number(a.featured) || a.name.localeCompare(b.name) || a.code.localeCompare(b.code))
   return rows.map(row => ({
-    label: `${row.name} (${row.code})`,
+    label: row.name.includes(`(${row.code})`) ? row.name : `${row.name} (${row.code})`,
     value: row.code
   }))
 })
@@ -160,6 +165,24 @@ function removeBasketNumber(number: string) {
 }
 
 let resetting = false
+let syncing = false
+
+function currentParams() {
+  return {
+    kind: kind.value,
+    area: areaCode.value,
+    grade: grade.value,
+    plan: previewPlan.value
+  }
+}
+
+function publishSearch() {
+  if (route.path !== '/telephone-numbers') return
+  const next = telephoneSearchQuery(currentParams())
+  const current = telephoneSearchQuery(readTelephoneSearch(route.query))
+  if (sameTelephoneSearch(next, current)) return
+  return router.replace({ path: '/telephone-numbers', query: next })
+}
 
 async function showNumbers(nextPage = 1, append = false) {
   await search(activeArea.value, grade.value, nextPage, append)
@@ -185,6 +208,7 @@ function resetFilters() {
   planPickerOpen.value = false
   nextTick(() => {
     resetting = false
+    router.replace({ path: '/telephone-numbers', query: {} })
     showNumbers(1, false)
   })
 }
@@ -227,14 +251,38 @@ async function confirmPlan() {
   if (!error.value) planOpen.value = false
 }
 
+watch([kind, areaCode], () => {
+  if (resetting || syncing) return
+  publishSearch()
+  showNumbers(1, false)
+}, { flush: 'sync' })
+
 watch(grade, () => {
-  if (resetting) return
+  if (resetting || syncing) return
+  publishSearch()
   if (refilter(grade.value)) return
   showNumbers(1, false)
-})
+}, { flush: 'sync' })
 
-watch([kind, areaCode], () => {
-  if (resetting) return
+watch(previewPlan, () => {
+  if (resetting || syncing) return
+  publishSearch()
+}, { flush: 'sync' })
+
+watch(() => route.fullPath, () => {
+  if (route.path !== '/telephone-numbers') return
+  const next = readTelephoneSearch(route.query)
+  if (sameTelephoneSearch(telephoneSearchQuery(next), telephoneSearchQuery(currentParams()))) return
+  const previous = currentParams()
+  syncing = true
+  kind.value = next.kind
+  areaCode.value = next.area
+  grade.value = next.grade
+  previewPlan.value = next.plan
+  syncing = false
+  const searchChanged = next.kind !== previous.kind || next.area !== previous.area || next.grade !== previous.grade
+  if (!searchChanged) return
+  if (next.kind === previous.kind && next.area === previous.area && refilter(next.grade)) return
   showNumbers(1, false)
 })
 
@@ -248,8 +296,9 @@ onMounted(() => {
 <template>
   <div>
     <div
-      class="sticky top-(--ui-header-height) z-40 flex flex-col gap-3 border-b border-default bg-default/75 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:px-6"
+      class="sticky top-(--ui-header-height) z-40 border-b border-default bg-default/75 backdrop-blur-sm"
     >
+      <UContainer class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
       <div class="flex items-center justify-between gap-3 sm:contents">
         <UTooltip class="shrink-0 sm:order-1">
           <UButton
@@ -313,19 +362,32 @@ onMounted(() => {
           <span class="truncate">{{ previewLabel }}</span>
         </UButton>
         <template #content>
-          <div class="flex max-h-[min(24rem,calc(100dvh-5rem))] w-[min(20rem,calc(100vw-2rem))] flex-col gap-2 overflow-y-auto p-3 text-left">
-            <button
-              v-for="option in LANDLINE_PLANS"
-              :key="option.id"
-              type="button"
-              class="rounded-md border px-3 py-3 text-left transition"
-              :class="previewPlan === option.id ? 'border-primary bg-primary/10' : 'border-default hover:bg-elevated'"
-              @click="choosePreview(option.id)"
-            >
-              <span class="block text-left font-medium text-highlighted">{{ option.name }}</span>
-              <span class="mt-0.5 block text-left text-sm text-muted">£{{ option.monthly }}/month</span>
-              <span class="mt-2 block text-left text-sm text-muted">{{ planForwarding(option.id).replace(' to your landline or mobile number', '') }}</span>
-            </button>
+          <div class="flex w-[min(20rem,calc(100vw-2rem))] flex-col text-left">
+            <div class="flex max-h-[min(24rem,calc(100dvh-8rem))] flex-col gap-2 overflow-y-auto p-3">
+              <button
+                v-for="option in LANDLINE_PLANS"
+                :key="option.id"
+                type="button"
+                class="rounded-md border px-3 py-3 text-left transition"
+                :class="previewPlan === option.id ? 'border-primary bg-primary/10' : 'border-default hover:bg-elevated'"
+                @click="choosePreview(option.id)"
+              >
+                <span class="block text-left font-medium text-highlighted">{{ option.name }}</span>
+                <span class="mt-0.5 block text-left text-sm text-muted">£{{ option.monthly }}/month</span>
+                <span class="mt-2 block text-left text-sm text-muted">{{ planForwarding(option.id).replace(' to your landline or mobile number', '') }}</span>
+              </button>
+            </div>
+            <div class="border-t border-default p-3">
+              <UButton
+                :to="withSearch('/telephone-numbers/pricing')"
+                color="neutral"
+                variant="ghost"
+                block
+                trailing-icon="i-lucide-arrow-right"
+              >
+                Pricing details
+              </UButton>
+            </div>
           </div>
         </template>
       </UPopover>
@@ -359,6 +421,7 @@ onMounted(() => {
         />
       </div>
 
+      </UContainer>
     </div>
 
     <UContainer class="py-10">
@@ -477,20 +540,23 @@ onMounted(() => {
               </div>
             </UCard>
           </li>
-          <li v-if="remaining > 0">
+          <li
+            v-if="remaining > 0"
+            class="sm:col-span-2 lg:col-span-1 lg:col-start-2"
+          >
             <UCard
-              class="bg-success text-white ring-success transition hover:bg-success/90"
+              class="bg-success text-white ring-success transition hover:bg-success/90 dark:text-slate-950"
               :ui="{ body: 'p-3 sm:p-4' }"
             >
               <div class="flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  class="min-w-0 truncate text-left text-base font-semibold tracking-wide whitespace-nowrap text-white sm:text-lg"
+                  class="min-w-0 truncate text-left text-base font-semibold tracking-wide whitespace-nowrap text-white sm:text-lg dark:text-slate-950"
                   :disabled="searching && !loadingMore"
                   @click="loadMore"
                 >
                   {{ loadingMore ? 'Loading…' : 'Load more' }}
-                  <span class="text-sm font-medium text-white/80">· {{ remainingLabel }}</span>
+                  <span class="text-sm font-medium text-white/80 dark:text-slate-950/80">· {{ remainingLabel }}</span>
                 </button>
                 <UButton
                   :icon="loadingMore ? undefined : 'i-lucide-chevron-down'"

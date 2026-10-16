@@ -80,6 +80,13 @@ export function useMobileShop() {
     return basket.value.some(item => item.number === number)
   }
 
+  function clearSession() {
+    sessionId.value = ''
+    basket.value = []
+    ready.value = false
+    if (import.meta.client) localStorage.removeItem(SESSION_KEY)
+  }
+
   async function ensureSession() {
     error.value = ''
     const stored = import.meta.client ? localStorage.getItem(SESSION_KEY) : ''
@@ -326,6 +333,7 @@ export function useMobileShop() {
     error,
     total,
     inBasket,
+    clearSession,
     ensureSession,
     search,
     findNumber,

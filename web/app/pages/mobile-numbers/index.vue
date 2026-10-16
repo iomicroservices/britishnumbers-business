@@ -115,7 +115,10 @@ function removeBasketNumber(number: string) {
   if (item) removeFromBasket(item.id)
 }
 
-const foundLabel = computed(() => `${resultTotal.value} number${resultTotal.value === 1 ? '' : 's'} found`)
+const foundLabel = computed(() => {
+  const count = resultTotal.value.toLocaleString('en-GB')
+  return `${count} number${resultTotal.value === 1 ? '' : 's'} found`
+})
 const remaining = computed(() => Math.max(0, resultTotal.value - results.value.length))
 const remainingLabel = computed(() => `${remaining.value.toLocaleString('en-GB')} number${remaining.value === 1 ? '' : 's'} still to see`)
 const hasLoaded = ref(false)
@@ -276,9 +279,10 @@ async function loadMore() {
 <template>
   <div>
     <form
-      class="sticky top-(--ui-header-height) z-40 flex flex-col gap-3 border-b border-default bg-default/75 px-4 py-3 backdrop-blur-sm sm:flex-row sm:items-center sm:px-6"
+      class="sticky top-(--ui-header-height) z-40 border-b border-default bg-default/75 backdrop-blur-sm"
       @submit.prevent="onSearch"
     >
+      <UContainer class="flex flex-col gap-3 py-3 sm:flex-row sm:items-center">
       <div class="flex items-center justify-between gap-3 sm:contents">
         <UTooltip class="shrink-0 sm:order-1">
           <UButton
@@ -431,6 +435,7 @@ async function loadMore() {
           </UPopover>
         </div>
       </div>
+      </UContainer>
     </form>
 
     <UContainer class="py-10">
@@ -550,20 +555,23 @@ async function loadMore() {
               </div>
             </UCard>
           </li>
-          <li v-if="remaining > 0">
+          <li
+            v-if="remaining > 0"
+            class="sm:col-span-2 lg:col-span-1 lg:col-start-2"
+          >
             <UCard
-              class="bg-success text-white ring-success transition hover:bg-success/90"
+              class="bg-success text-white ring-success transition hover:bg-success/90 dark:text-slate-950"
               :ui="{ body: 'p-3 sm:p-4' }"
             >
               <div class="flex items-center justify-between gap-3">
                 <button
                   type="button"
-                  class="min-w-0 truncate text-left text-base font-semibold tracking-wide whitespace-nowrap text-white sm:text-lg"
+                  class="min-w-0 truncate text-left text-base font-semibold tracking-wide whitespace-nowrap text-white sm:text-lg dark:text-slate-950"
                   :disabled="searching && !loadingMore"
                   @click="loadMore"
                 >
                   {{ loadingMore ? 'Loading…' : 'Load more' }}
-                  <span class="text-sm font-medium text-white/80">· {{ remainingLabel }}</span>
+                  <span class="text-sm font-medium text-white/80 dark:text-slate-950/80">· {{ remainingLabel }}</span>
                 </button>
                 <UButton
                   :icon="loadingMore ? undefined : 'i-lucide-chevron-down'"

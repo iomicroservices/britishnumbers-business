@@ -49,7 +49,6 @@ export const LANDLINE_PLANS: { id: LandlinePlanId, name: string, monthly: number
 
 export const FALLBACK_AREA_CODES: AreaCode[] = [
   { name: 'London', code: '0203', featured: true },
-  { name: 'London', code: '0207', featured: true },
   { name: 'London', code: '0208', featured: true },
   { name: 'Birmingham', code: '0121', featured: true },
   { name: 'Manchester', code: '0161', featured: true },
@@ -181,6 +180,13 @@ export function useLandlineShop() {
     resultTotal.value = filtered.length
   }
 
+  function clearSession() {
+    sessionId.value = ''
+    basket.value = []
+    ready.value = false
+    if (import.meta.client) localStorage.removeItem(SESSION_KEY)
+  }
+
   async function ensureSession() {
     error.value = ''
     const stored = import.meta.client ? localStorage.getItem(SESSION_KEY) : ''
@@ -208,7 +214,7 @@ export function useLandlineShop() {
   async function loadAreaCodes() {
     try {
       const response = await $fetch<AreaCode[] | { error?: string }>('/api/area-codes')
-      const rows = Array.isArray(response) ? response : []
+      const rows = Array.isArray(response) ? response.filter(row => row.code !== '0207') : []
       areaCodes.value = rows.length ? rows : FALLBACK_AREA_CODES
     } catch {
       areaCodes.value = FALLBACK_AREA_CODES
@@ -469,6 +475,7 @@ export function useLandlineShop() {
     connectionTotal,
     total,
     inBasket,
+    clearSession,
     ensureSession,
     loadAreaCodes,
     search,
